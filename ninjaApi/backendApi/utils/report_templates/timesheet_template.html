@@ -1,0 +1,76 @@
+<div class="page-container">Page of</div>
+<div class="logo-container"><img style="height: 50px;" src="" /></div>
+<table class="invoice-info-container" style="height: 72px;">
+    <tbody>
+        <tr style="height: 18px;">
+            <td class="client-name td-left" style="height: 36px; width: 228.844px;" rowspan="2">Timesheet report for {{name}}</td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{name}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="tr-right"style="height: 18px; width: 175.797px;">{{street}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="td-left" style="height: 18px; width: 228.844px;">Report for the period: <strong>{{timesheet_start_date}}</strong> to <strong>{{timesheet_end_date}}</strong></td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{street2}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="td-left" style="height: 18px; width: 228.844px;">Report No: {{timesheet_id}}</td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{email}}</td>
+        </tr>
+    </tbody>
+</table>
+<table class="line-items-container">
+    <thead>
+        <tr>
+            <th class="heading-name">Date</th>
+            
+            <!-- check in & check out -->
+            <th class="heading-d">In</th>
+            <th class="heading-d">Out</th>
+
+            <!-- check if we need check_in_2 and check_out_2 -->
+            {% if depth == 2 %}
+                <th class="heading-d">In</th>
+                <th class="heading-d">Out</th>
+            {% endif %}
+            
+            <!-- check if we need check_in_3 and check_out_3 -->
+            {% if depth == 3 %}
+                <th class="heading-d">In</th>
+                <th class="heading-d">Out</th>
+            {% endif %}
+
+            <th class="heading-total-hours">Total hours</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- foreach attendance day create a new row -->
+        {% for row in day_rows %}
+            <tr>
+                <td>{{row.date}}</td>
+
+                <td>{{row.check_in}}</td>
+                <td>{{row.check_out}}</td>
+
+                <!-- check if we need check_in_2 and check_out_2 -->
+                {% if depth == 2 %}
+                    <td>{{row.check_in_2}}</td>
+                    <td>{{row.check_out_2}}</td>
+                {% endif %}
+
+                <!-- check if we need check_in_3 and check_out_3 -->
+                {% if depth == 3 %}
+                    <td>{{row.check_in_3}}</td>
+                    <td>{{row.check_out_3}}</td>
+                {% endif %}
+               
+                <td class="bold td-left">{{row.total_time}}</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<!-- <div class="footer">
+    <div class="footer-info">hello@useanvil.com | 555 444 6666 | useanvil.com</div>
+    <div class="footer-thanks"><img src="https://github.com/anvilco/html-pdf-invoice-template/raw/main/img/heart.png"
+            alt="heart" />Thank you!</div>
+</div> -->

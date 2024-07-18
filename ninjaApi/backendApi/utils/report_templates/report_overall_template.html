@@ -1,0 +1,76 @@
+<div class="page-container">Page of</div>
+<div class="logo-container"><img style="height: 50px;" src="" /></div>
+<table class="invoice-info-container" style="height: 72px;">
+    <tbody>
+        <tr style="height: 18px;">
+            <td class="client-name td-left" style="height: 36px; width: 228.844px;" rowspan="2">{{business_name}} staff attendance report</td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{business_name}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="tr-right"style="height: 18px; width: 175.797px;">{{street}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="td-left" style="height: 18px; width: 228.844px;">Report for the period: <strong>{{report_start_date}}</strong> to <strong>{{report_end_date}}</strong></td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{street2}}</td>
+        </tr>
+        <tr style="height: 18px;">
+            <td class="td-left" style="height: 18px; width: 228.844px;">Report No: {{report_id}}</td>
+            <td class="tr-right" style="height: 18px; width: 175.797px;">{{email}}</td>
+        </tr>
+    </tbody>
+</table>
+<table class="line-items-container">
+    <thead>
+        <tr>
+            <th class="heading-name">Name</th>
+            
+            <!-- foreach day create a new table header -->
+            {% set day = namespace(value=current_day) %}
+            {% for i in range(day_count + 1) %}
+                <th class="heading-d">{{day.value}}</th>
+                {% set day.value = day.value + 1 %}
+            {% endfor %}
+
+            <th class="heading-total-hours">Total hours</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- foreach person create a new row -->
+        {% for person in people %}
+            <tr>
+                <td class="name-column">{{person.name}}</td>
+
+                <!-- foreach day, create a new column -->
+                {% for key, value in person.days.items() %}
+                    <td class="day-column">{{value}}</td>
+                {% endfor %}
+
+                <td class="bold person-total-hours">{{person.total_hours}}</td>
+            </tr>
+        {% endfor %}
+
+        <!-- <tr>
+            <td>&nbsp;</td>
+            <td>{{item1}}</td>
+            <td class="right">&nbsp;</td>
+            <td class="bold">{{subtotal1}}</td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td>{{item2}}</td>
+            <td class="right">&nbsp;</td>
+            <td class="bold">{{subtotal2}}</td>
+        </tr>
+        <tr>
+            <td>&nbsp;</td>
+            <td>{{item3}}</td>
+            <td class="right">&nbsp;</td>
+            <td class="bold">{{subtotal3}}</td>
+        </tr> -->
+    </tbody>
+</table>
+<!-- <div class="footer">
+    <div class="footer-info">hello@useanvil.com | 555 444 6666 | useanvil.com</div>
+    <div class="footer-thanks"><img src="https://github.com/anvilco/html-pdf-invoice-template/raw/main/img/heart.png"
+            alt="heart" />Thank you!</div>
+</div> -->
