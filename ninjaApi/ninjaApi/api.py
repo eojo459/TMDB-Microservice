@@ -9,8 +9,8 @@ from people.api import router as people_router
 from trailers.api import router as trailers_router
 from reviews.api import router as reviews_router
 
-#api = NinjaAPI() # no auth
-api = NinjaAPI(auth=SupabaseTokenAuthentication()) # global auth
+api = NinjaAPI() # no auth
+#api = NinjaAPI(auth=SupabaseTokenAuthentication()) # global auth
 
 # api routers
 api.add_router("/", backend_router)

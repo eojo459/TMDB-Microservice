@@ -91,3 +91,10 @@ def generate_random_invite_code():
 def auth_session_user(jwt_token):
     res = supabase.auth.get_user(jwt_token)
     return res
+
+# check if difference is >= certain amount of time
+def calculate_day_difference(date_str, days_difference):
+    given_date = datetime.strptime(date_str, '%Y-%m-%d')
+    today_date = datetime.today()
+    difference = today_date - given_date
+    return difference.days >= days_difference
