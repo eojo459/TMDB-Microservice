@@ -25,7 +25,7 @@ class Movie(Schema):
     imdb_id: str
     poster_url: str
     title: str
-    rating: int
+    rating: float
     release_date: date
     description: str
     origin_location: str
@@ -45,7 +45,7 @@ class MovieOut(Schema):
     imdb_id: str
     poster_url: str
     title: str
-    rating: int
+    rating: float
     release_date: date
     description: str
     origin_location: str
@@ -61,7 +61,7 @@ class MovieOutFull(Schema):
     imdb_id: str
     poster_url: str
     title: str
-    rating: int
+    rating: float
     release_date: date
     description: str
     origin_location: str
