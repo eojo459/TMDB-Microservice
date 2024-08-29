@@ -32,8 +32,8 @@ class Movie(Schema):
     languages: str
     imdb_link: str
     youtube_trailer: List[Trailer]
-    actors_cast: List[People]
-    director: List[People]
+    actors_cast: List[People] = None
+    director: List[People] = None
     genres: List[Genre]
     run_time: int
     enabled: bool
@@ -68,8 +68,8 @@ class MovieOutFull(Schema):
     languages: str
     imdb_link: str
     youtube_trailer: List[Trailer]
-    actors_cast: List[People]
-    director: List[People]
+    actors_cast: List[People] = None
+    director: List[People] = None
     genres: List[Genre]
     run_time: int
     enabled: bool
@@ -377,19 +377,37 @@ def get_movie_by_id(request, id: str):
     movie_found = False
     try:
         # try regular uuid id
-        movie = Movies.objects.filter(id=id).first()
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(id=id).first()
         if movie is not None:
             movie_found = True
     except:
         # try imdb id
         try:
-            movie = Movies.objects.filter(imdb_id=id).first()
+            movie = Movies.objects.prefetch_related(
+                'youtube_trailer',
+                'actors_cast',
+                'director',
+                'genres',
+                'reviews'
+            ).filter(imdb_id=id).first()
             if movie is not None:
                 movie_found = True
         except:
             # try tmdb id
             try:
-                movie = Movies.objects.filter(tmdb_id=id).first()
+                movie = Movies.objects.prefetch_related(
+                    'youtube_trailer',
+                    'actors_cast',
+                    'director',
+                    'genres',
+                    'reviews'
+                ).filter(tmdb_id=id).first()
                 if movie is not None:
                     movie_found = True
             except:
@@ -412,10 +430,16 @@ def get_movie_by_imdb_id(request, imdb_id: str):
     movie = get_object_or_404(Movies, imdb_id=imdb_id)
     return movie
 
-# list all movies
-@router.get("/", response=List[MovieOut])
+# list all movies first 1
+@router.get("/", response=List[MovieOutFull])
 def list_all_movies(request):
-    movies_list = Movies.objects.all()[:100]
+    movies_list = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).all()[:999]
     for movie in movies_list:
         if movie.imdb_id == None or movie.imdb_id == "":
             movie.imdb_id = "zz" + str(movie.tmdb_id)

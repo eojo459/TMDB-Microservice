@@ -20,8 +20,8 @@ class People(Schema):
     tmdb_id: int
     name: str
     original_name: str
-    avatar_path: str
-    known_for_department: int
+    avatar_path: str | None = None
+    known_for_department: str = None
     popularity: int
 
 class PeopleOut(Schema):
@@ -29,8 +29,8 @@ class PeopleOut(Schema):
     tmdb_id: int
     name: str
     original_name: str
-    avatar_path: str
-    known_for_department: str
+    avatar_path: str | None = None
+    known_for_department: str = None
     popularity: int
 
 ################################
