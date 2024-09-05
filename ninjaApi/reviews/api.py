@@ -20,8 +20,8 @@ class Review(Schema):
     imdb_id: str
     name: str
     username: str
-    avatar_path: str
-    rating: int
+    avatar_path: str | None = None
+    rating: int | None = None
     content: str
     created_at: datetime
     updated_at: datetime
@@ -33,8 +33,8 @@ class ReviewOut(Schema):
     imdb_id: str
     name: str
     username: str
-    avatar_path: str
-    rating: int
+    avatar_path: str | None = None
+    rating: int | None = None
     content: str
     created_at: datetime
     updated_at: datetime
@@ -286,25 +286,25 @@ def create_review(request, payload: Review):
     return {"id": review.id}
 
 # get review by id
-@router.get("/reviews/id/{id}", response=ReviewOut)
+@router.get("/id/{id}", response=ReviewOut)
 def get_review_by_id(request, id: str):
     review = get_object_or_404(Reviews, id=id)
     return review
 
 # get review by imdb_id
-@router.get("/reviews/imdb_id/{imdb_id}", response=ReviewOut)
+@router.get("/imdb_id/{imdb_id}", response=ReviewOut)
 def get_review_by_imdb_id(request, imdb_id: str):
     review = get_object_or_404(Reviews, imdb_id=imdb_id)
     return review
 
 # list all reviews
-@router.get("/reviews/", response=List[ReviewOut])
+@router.get("/", response=List[ReviewOut])
 def list_all_reviews(request):
     review_list = Reviews.objects.all()
     return review_list
 
 # update review by id
-@router.put("/reviews/id/{id}")
+@router.put("/id/{id}")
 def update_review_by_id(request, id: str, payload: ReviewOut):
     review = get_object_or_404(Reviews, id=id)
     for attr, value in payload.dict().items():
@@ -313,7 +313,7 @@ def update_review_by_id(request, id: str, payload: ReviewOut):
     return {"success": True}
 
 # update review by imdb_id
-@router.put("/reviews/imdb_id/{imdb_id}")
+@router.put("/imdb_id/{imdb_id}")
 def update_review_by_imdb_id(request, imdb_id: str, payload: ReviewOut):
     review = get_object_or_404(Reviews, imdb_id=imdb_id)
     for attr, value in payload.dict().items():
@@ -322,7 +322,7 @@ def update_review_by_imdb_id(request, imdb_id: str, payload: ReviewOut):
     return {"success": True}
 
 # delete/disable review by id
-@router.delete("/reviews/id/{id}")
+@router.delete("/id/{id}")
 def delete_review_by_id(request, id: str):
     review = get_object_or_404(Reviews, id=id)
     #review.delete()
@@ -332,7 +332,7 @@ def delete_review_by_id(request, id: str):
     return {"success": True}
 
 # delete/disable review by imdb_id
-@router.delete("/reviews/imdb_id/{imdb_id}")
+@router.delete("/imdb_id/{imdb_id}")
 def delete_review_by_imdb_id(request, imdb_id: str):
     review = get_object_or_404(Reviews, imdb_id=imdb_id)
     #review.delete()

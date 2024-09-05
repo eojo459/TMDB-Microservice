@@ -187,25 +187,25 @@ def create_genre(request, payload: Genre):
     return {"id": genre.id}
 
 # get genre by id
-@router.get("/genres/id/{id}", response=GenreOut)
+@router.get("/id/{id}", response=GenreOut)
 def get_genre_by_id(request, id: str):
     genre = get_object_or_404(Genres, id=id)
     return genre
 
 # get genre by tmdb_id
-@router.get("/genres/tmdb_id/{tmdb_id}", response=GenreOut)
+@router.get("/tmdb_id/{tmdb_id}", response=GenreOut)
 def get_genre_by_tmdb_id(request, tmdb_id: int):
     genre = get_object_or_404(Genres, tmdb_id=tmdb_id)
     return genre
 
 # list all genres
-@router.get("/genres/", response=List[GenreOut])
+@router.get("/", response=List[GenreOut])
 def list_all_genres(request):
     genre_list = Genres.objects.all()
     return genre_list
 
 # update genre by id
-@router.put("/genres/id/{id}")
+@router.put("/id/{id}")
 def update_genre_by_id(request, id: str, payload: GenreOut):
     genre = get_object_or_404(Genres, id=id)
     for attr, value in payload.dict().items():
@@ -214,7 +214,7 @@ def update_genre_by_id(request, id: str, payload: GenreOut):
     return {"success": True}
 
 # update genre by tmdb_id
-@router.put("/genres/tmdb_id/{tmdb_id}")
+@router.put("/tmdb_id/{tmdb_id}")
 def update_genre_by_tmdb_id(request, tmdb_id: int, payload: GenreOut):
     genre = get_object_or_404(Genres, tmdb_id=tmdb_id)
     for attr, value in payload.dict().items():
@@ -223,7 +223,7 @@ def update_genre_by_tmdb_id(request, tmdb_id: int, payload: GenreOut):
     return {"success": True}
 
 # delete/disable genre by id
-@router.delete("/genres/id/{id}")
+@router.delete("/id/{id}")
 def delete_genre_by_id(request, id: str):
     genre = get_object_or_404(Genres, id=id)
     #genre.delete()
@@ -233,7 +233,7 @@ def delete_genre_by_id(request, id: str):
     return {"success": True}
 
 # delete/disable genre by tmdb_id
-@router.delete("/genres/tmdb_id/{tmdb_id}")
+@router.delete("/tmdb_id/{tmdb_id}")
 def delete_genre_by_tmdb_id(request, tmdb_id: int):
     genre = get_object_or_404(Genres, tmdb_id=tmdb_id)
     #genre.delete()

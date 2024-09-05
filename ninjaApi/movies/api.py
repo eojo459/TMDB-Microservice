@@ -1,3 +1,4 @@
+from django.forms import model_to_dict
 import requests
 from datetime import date, datetime
 from typing import List
@@ -23,21 +24,22 @@ router = Router()
 class Movie(Schema):
     tmdb_id: int
     imdb_id: str
-    poster_url: str
+    poster_url: str | None = None
+    backdrop_url: str | None = None
     title: str
-    rating: float
+    rating: float | None = None
     release_date: date
     description: str
     origin_location: str
     languages: str
-    imdb_link: str
-    youtube_trailer: List[Trailer]
+    imdb_link: str | None = None
+    youtube_trailer: List[Trailer] = None
     actors_cast: List[People] = None
     director: List[People] = None
-    genres: List[Genre]
-    run_time: int
+    genres: List[Genre] = None
+    run_time: int | None = None
     enabled: bool
-    expires: datetime
+    expires: datetime | None = None
 
 class MovieOut(Schema):
     id: UUID
@@ -51,28 +53,44 @@ class MovieOut(Schema):
     origin_location: str
     languages: str
     imdb_link: str
-    run_time: int
+    run_time: int 
     enabled: bool
     #expires: datetime
 
-class MovieOutFull(Schema):
-    id: UUID
+class MovieRecommendations(Schema):
     tmdb_id: int
-    imdb_id: str
-    poster_url: str
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    backdrop_url: str | None = None
     title: str
     rating: float
     release_date: date
     description: str
-    origin_location: str
+    genres: List[Genre] | None = None
     languages: str
-    imdb_link: str
-    youtube_trailer: List[Trailer]
+    media_type: str | None = None
+    #run_time: int
+
+class MovieOutFull(Schema):
+    id: UUID | None = None
+    tmdb_id: int | None = None
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    backdrop_url: str | None = None
+    title: str | None = None
+    rating: float | None = None
+    release_date: date | None = None
+    description: str | None = None
+    origin_location: str | None = None
+    languages: str | None = None
+    imdb_link: str | None = None
+    youtube_trailer: List[Trailer] = None
     actors_cast: List[People] = None
     director: List[People] = None
-    genres: List[Genre]
-    run_time: int
-    enabled: bool
+    genres: List[Genre] = None
+    recommendations: List[MovieRecommendations] = None
+    run_time: int | None = None
+    enabled: bool | None = None
     #expires: datetime
 
 ################################
@@ -83,286 +101,18 @@ class MovieOutFull(Schema):
 @router.get("/seeding/")
 def movies_seeding(request):
     skip_round_1 = False
-    skip_round_2 = True
+    skip_round_2 = False
 
-    # get movies
-    base_url = "https://api.themoviedb.org/3/discover/movie"
-    page = 1
-    max_pages = 500 # TMDB limits us to 500 pages
-
-    # set headers
-    headers = {
-        "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
-    }
-
-    # 1st round get based on most popular sort by descending (highest popularity to least popularity) 
-    if skip_round_1 is False:
-        print("===== Starting round 1 =====")
-        url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
-
-        response = requests.get(url, headers=headers)
-        response_json = response.json()
-
-        if response_json['total_pages'] > 1:
-            # get all the pages we can get
-            while page <= max_pages:
-                print("===== Page " + str(page) + " =====")
-
-                # for each result on this page, create new movie entry in database if doesn't already exist
-                for result in response_json['results']:
-                    movie_info = {
-                        'tmdb_id': result['id'],
-                        'imdb_id': "zz" + str(result['id']),
-                        'poster_url': result['poster_path'],
-                        'title': result['title'][:255],
-                        'rating': result['vote_average'],
-                        'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
-                        'description': result['overview'][:255],
-                        'origin_location': '',
-                        'languages': result['original_language'],
-                        'imdb_link': '',
-                        'last_updated': datetime.now().date(),
-                        'run_time': 0,
-                    }
-
-                    # check if movie doesn't already exist
-                    movie_exists = Movies.objects.filter(tmdb_id=result['id']).first()
-                    if movie_exists and movie_exists.last_updated is not None:
-                        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
-                            # update movie entry
-                            movie_exists.tmdb_id = result['id']
-                            movie_exists.poster_url = result['poster_path']
-                            movie_exists.title = result['title']
-                            movie_exists.rating = result['rating']
-                            movie_exists.release_date = result['release_date']
-                            movie_exists.description = result['overview'][:255]
-                            movie_exists.last_updated = datetime.now().date()
-                            movie_exists.save()
-                    elif movie_exists is None:
-                        # create new movie entry
-                        Movies.objects.create(**movie_info)
-                    else:
-                        continue # skip
-
-                # go to next page
-                page += 1
-                url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
-                response = requests.get(url, headers=headers)
-                response_json = response.json()
-
-        print("===== End of round 1 =====")
-
-    # 2nd round get based on release date sort by descending (newest to oldest) 
-    if skip_round_2 is False:
-        page = 1
-        release_date_min = "1970-01-01"
-        release_date_max = "2025-12-31"
-        url = f"{base_url}?include_adult=false&language=en-US&primary_release_date.gte={release_date_min}&primary_release_date.lte={release_date_max}&page={page}&sort_by=primary_release_date.desc"
-
-        response = requests.get(url, headers=headers)
-        response_json = response.json()
-
-        if response_json['total_pages'] > 1:
-            print("===== Starting round 2 =====")
-            # get all the pages we can get
-            while page <= max_pages:
-                print("===== Page " + str(page) + " =====")
-
-                # for each result on this page, create new movie entry in database if doesn't already exist
-                for result in response_json['results']:
-                    movie_info = {
-                        'tmdb_id': result['id'],
-                        'imdb_id': "zz" + str(result['id']),
-                        'poster_url': result['poster_path'],
-                        'title': result['title'][:255],
-                        'rating': result['vote_average'],
-                        'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
-                        'description': result['overview'][:255],
-                        'origin_location': '',
-                        'languages': result['original_language'],
-                        'imdb_link': '',
-                        'run_time': 0,
-                        'last_updated': datetime.now().date(),
-                    }
-
-                    # check if movie doesn't already exist
-                    movie_exists = Movies.objects.filter(tmdb_id=result['id']).first()
-                    if movie_exists and movie_exists.last_updated is not None:
-                        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
-                            # update movie entry
-                            movie_exists.tmdb_id = result['id']
-                            movie_exists.poster_url = result['poster_path']
-                            movie_exists.title = result['title']
-                            movie_exists.rating = result['rating']
-                            movie_exists.release_date = result['release_date']
-                            movie_exists.description = result['overview'][:255]
-                            movie_exists.last_updated = datetime.now().date()
-                            movie_exists.save()
-                    elif movie_exists is None:
-                        # create new movie entry
-                        Movies.objects.create(**movie_info)
-                    else:
-                        continue # skip
-
-                # go to next page
-                page += 1
-                url = f"{base_url}?include_adult=false&language=en-US&primary_release_date.gte={release_date_min}&primary_release_date.lte={release_date_max}&page={page}&sort_by=primary_release_date.desc"
-                response = requests.get(url, headers=headers)
-                response_json = response.json()
-
+    # TODO fetch data from other sources too
+    fetch_movies_TMDB(skip_round_1, skip_round_2)
     return {"success": True}
    #return response.json()
 
 ### initial data loading ##
 @router.get("/seeding/data")
 def movies_data_loading(request):
-    # set headers
-    headers = {
-        "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
-    }
-    
-    # get all movies
-    movies = Movies.objects.all()
-
-    print("===== Starting movie detail setup =====")
-    movie_count = 1
-
-    for movie in movies:
-        print(f"===== Movie #{movie_count}: {movie.title}")
-        actor_list = []
-        director_list = []
-        genre_list = []
-        trailer_list = []
-
-        # url to get the details about a movie
-        url = f"https://api.themoviedb.org/3/movie/{movie.tmdb_id}?language=en-US&append_to_response=videos,images,credits"
-        response = requests.get(url, headers=headers)
-        response_json = response.json()
-
-        # update imdb_id
-        if movie.imdb_id is not None and movie.imdb_id != '':
-            if movie.imdb_id == int(movie.imdb_id[2:]):
-                movie.imdb_id = response_json['imdb_id']
-
-        # update status
-        movie.status = response_json['status']
-
-        # people credits
-        credits = response_json['credits']
-
-        # trailers
-        trailers = response_json['videos']
-
-        # genres
-        genres = response_json['genres']
-
-        # foreach movie get the credits then actors and directors
-        for result in credits['cast']:
-            existing_person = Peoples.objects.filter(tmdb_id=result['id']).first()
-            if existing_person is not None:
-                # check if we already have a many to many relationship with this person for the movie
-                actor_exists = movie.actors_cast.filter(id=existing_person.id).exists()
-                if actor_exists:
-                    continue # skip
-                else:
-                    # add actor to list to create new many to many relationship
-                    if result['known_for_department'] == 'Acting':
-                        if 'job' in result and result['job'] == 'Director':
-                            director_list.append(existing_person)
-                        else:
-                            actor_list.append(existing_person)
-            else:
-                if result['known_for_department'] == 'Acting':
-                    if 'job' in result and result['job'] == 'Director':
-                        # create new people entry for director
-                        new_person = {
-                            'tmdb_id': result['id'],
-                            'name': result['name'],
-                            'original_name': result['original_name'],
-                            'avatar_path': result['profile_path'],
-                            'known_for_department': result['job'],
-                            'popularity': result['popularity'],
-                        }
-                        person = Peoples.objects.create(**new_person)
-                        director_list.append(person)
-                    else:
-                        # create new people entry for actor
-                        new_person = {
-                            'tmdb_id': result['id'],
-                            'name': result['name'],
-                            'original_name': result['original_name'],
-                            'avatar_path': result['profile_path'],
-                            'known_for_department': result['known_for_department'],
-                            'popularity': result['popularity'],
-                        }
-                        person = Peoples.objects.create(**new_person)
-                        actor_list.append(person)
-
-        # foreach movie get the genres
-        for genre in genres:
-            existing_genre = Genres.objects.filter(tmdb_id=genre['id']).first()
-            if existing_genre is not None:
-                # check if we already have a many to many relationship with this genre for the movie
-                genre_exists = movie.genres.filter(id=existing_genre.id).exists()
-                if genre_exists:
-                    continue # skip
-                else:
-                    # add genre to list to create new many to many relationship
-                    genre_list.append(existing_genre)
-            else:
-                # create new genre
-                new_genre = {
-                    'tmdb_id': genre['id'],
-                    'name': genre['name'],
-                    'type': 0,
-                }
-                genre_obj = Genres.objects.create(**new_genre)
-                genre_list.append(genre_obj)
-        
-        # foreach movie get the trailers
-        for trailer in trailers['results']:
-            existing_trailer = Trailers.objects.filter(video_id=trailer['id']).first()
-            if existing_trailer is not None:
-                # check if we already have a many to many relationship with this trailer for the movie
-                trailer_exists = movie.youtube_trailer.filter(id=existing_trailer.id).exists()
-                if trailer_exists:
-                    continue # skip
-                else:
-                    # add trailer to list to create new many to many relationship
-                    trailer_list.append(existing_trailer)
-            else:
-                # create a new trailer
-                new_trailer = {
-                    'name': trailer['name'],
-                    'key': trailer['key'],
-                    'site': trailer['site'],
-                    'quality': trailer['size'],
-                    'type': trailer['type'],
-                    'official': trailer['official'],
-                    'published_at': trailer['published_at'],
-                    'video_id': trailer['id'],
-                }
-                trailer_obj = Trailers.objects.create(**new_trailer)
-                trailer_list.append(trailer_obj)
-
-        # update movie foreign keys/many to many relationships
-        if len(actor_list) > 0:
-            movie.actors_cast.set(actor_list)
-
-        if len(director_list) > 0:
-            movie.director.set(director_list)
-
-        if len(trailer_list) > 0:
-            movie.youtube_trailer.set(trailer_list)
-
-        if len(genre_list) > 0:
-            movie.genres.set(genre_list)
-
-        movie.save()
-        movie_count += 1
-    
+    # TODO load data from other sources too
+    load_movie_data_TMDB()
     return {"success": True}
 
 # create new movie
@@ -372,7 +122,7 @@ def create_movie(request, payload: Movie):
     return {"id": movie.id}
 
 # get movie by id
-@router.get("/id/{id}", response=MovieOut)
+@router.get("/id/{id}", response=MovieOutFull)
 def get_movie_by_id(request, id: str):
     movie_found = False
     try:
@@ -414,23 +164,26 @@ def get_movie_by_id(request, id: str):
                 return {"Message": "Movie not found"}
             
     if movie_found:
+        movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
         return movie
     else:
         return {"Message": "Movie not found"}
 
 # get movie by tmdb_id
-@router.get("/tmdb_id/{tmdb_id}", response=MovieOut)
+@router.get("/tmdb_id/{tmdb_id}", response=MovieOutFull)
 def get_movie_by_tmdb_id(request, tmdb_id: int):
     movie = get_object_or_404(Movies, tmdb_id=tmdb_id)
+    movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
     return movie
 
 # get movie by imdb_id
-@router.get("/imdb_id/{imdb_id}", response=MovieOut)
+@router.get("/imdb_id/{imdb_id}", response=MovieOutFull)
 def get_movie_by_imdb_id(request, imdb_id: str):
     movie = get_object_or_404(Movies, imdb_id=imdb_id)
+    movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
     return movie
 
-# list all movies first 1
+# list all movies first
 @router.get("/", response=List[MovieOutFull])
 def list_all_movies(request):
     movies_list = Movies.objects.prefetch_related(
@@ -439,13 +192,29 @@ def list_all_movies(request):
         'director',
         'genres',
         'reviews'
-    ).all()[:999]
+    ).all()[:100]
+
     for movie in movies_list:
+        #new_movie = model_to_dict(movie)
         if movie.imdb_id == None or movie.imdb_id == "":
             movie.imdb_id = "zz" + str(movie.tmdb_id)
         
         if movie.poster_url == None or movie.poster_url == "":
             movie.poster_url = ""
+
+    return movies_list
+
+# list all movies that contain a str in their title
+@router.get("/title/{title_str}", response=List[MovieOutFull])
+def get_movies_by_name(request, title_str: str):
+    movies_list = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(title__icontains=title_str)[:100]
+
     return movies_list
 
 # update movie by id
@@ -701,3 +470,991 @@ def get_movie_genres(request, movie_id: str):
         return genre_list
     else:
         return {"Message": "Movie not found"}
+    
+# get all recommendations/similiar movies for a movie
+@router.get("/{tmdb_id}/recommended/", response=List[MovieOutFull])
+def get_movie_recommendations(request, tmdb_id: str):
+    # TODO: make this more robust and possibly use AI to get better recommendations
+    movie_found = False
+
+    # try tmdb id
+    movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+    if movie is not None:
+        movie_found = True
+            
+    if movie_found == False:
+        return {"Message": "Movie not found"}
+    
+    movies_list = get_movie_recommendations_logic_TMDB(tmdb_id)
+
+    return movies_list
+
+@router.get("/newly-released/", response=List[MovieOutFull])
+def get_newly_released_movies_TMDB(request):
+    return fetch_movies_new_releases_TMDB()
+
+@router.get("/trending/daily/", response=List[MovieOutFull])
+def get_trending_movies_daily_TMDB(request):
+    return fetch_movies_trending_daily_TMDB()
+
+@router.get("/trending/weekly/", response=List[MovieOutFull])
+def get_trending_movies_weekly_TMDB(request):
+    return fetch_movies_trending_weekly_TMDB()
+
+@router.get("/details/{tmdb_id}", response=MovieOutFull)
+def get_movie_details_TMDB(request, tmdb_id: str):
+    return fetch_movie_by_TMDB_id(tmdb_id)
+
+###################################
+# HELPERS
+###################################
+
+# get recommendations for the movie specified
+def get_movie_recommendations_logic_TMDB(movie_id):
+    recommendation_list = []
+
+    # get movies
+    base_url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations"
+    page = 1
+    max_pages = 10 # TMDB limits us to 500 pages
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print(f"===== Getting movie recommendations for {movie_id} =====")
+    url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+    #url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if response_json['total_pages'] > 1:
+        # get all the pages we can get
+        while page <= max_pages:
+            #print("===== Page " + str(page) + " =====")
+
+            # for each result on this page, create new movie entry in database if doesn't already exist
+            for result in response_json['results']:
+                movie_info = {
+                    'tmdb_id': result['id'],
+                    #'imdb_id': "zz" + str(result['id']),
+                    'poster_url': result['poster_path'],
+                    'backdrop_url': result['backdrop_path'],
+                    'title': result['title'][:255],
+                    'rating': result['vote_average'],
+                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'description': result['overview'][:255],
+                    'origin_location': '',
+                    'languages': result['original_language'],
+                    #'genres': result['genre_ids'],
+                    #'last_updated': datetime.now().date(),
+                    'run_time': 0,
+                    #'media_type': result['media_type'],
+                }
+
+                movie_info = create_new_movie(movie_info)
+                if movie_info is not None:
+                    recommendation_list.append(movie_info)
+
+            # go to next page
+            page += 1
+            url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+            #url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+            response = requests.get(url, headers=headers)
+            response_json = response.json()
+
+    print("===== End of movie recommendations =====")
+    
+    return recommendation_list
+
+
+# get movies from TMDB
+def fetch_movies_TMDB(skip_round_1=False, skip_round_2=True):
+    base_url = "https://api.themoviedb.org/3/discover/movie"
+    page = 1
+    max_pages = 500 # TMDB limits us to 500 pages
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    # round 1
+    # 1st round get based on most popular sort by descending (highest popularity to least popularity) 
+    if skip_round_1 is False:
+        print("===== Starting round 1 =====")
+        url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+
+        response = requests.get(url, headers=headers)
+        response_json = response.json()
+
+        if response_json['total_pages'] > 1:
+            # get all the pages we can get
+            while page <= max_pages:
+                print("===== Page " + str(page) + " =====")
+
+                # for each result on this page, create new movie entry in database if doesn't already exist
+                for result in response_json['results']:
+                    movie_info = {
+                        'tmdb_id': result['id'],
+                        'imdb_id': "zz" + str(result['id']),
+                        'poster_url': result['poster_path'],
+                        'backdrop_url': result['backdrop_path'],
+                        'title': result['title'][:255],
+                        'rating': result['vote_average'],
+                        'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                        'description': result['overview'][:255],
+                        'origin_location': '',
+                        'languages': result['original_language'],
+                        'imdb_link': '',
+                        'last_updated': datetime.now().date(),
+                        #'run_time': result["runtime"],
+                    }
+
+                    # check if movie doesn't already exist
+                    movie_exists = Movies.objects.filter(tmdb_id=result['id']).first()
+                    if movie_exists and movie_exists.last_updated is not None:
+                        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+                            # update movie entry
+                            movie_exists.tmdb_id = result['id']
+                            movie_exists.poster_url = result['poster_path']
+                            movie_exists.title = result['title']
+                            movie_exists.rating = result['vote_average']
+                            movie_exists.release_date = result['release_date']
+                            movie_exists.description = result['overview'][:255]
+                            #movie_exists.run_time = result['runtime']
+                            movie_exists.last_updated = datetime.now().date()
+                            movie_exists.save()
+                    # elif movie_exists and movie_exists.run_time <= 0:
+                    #     # update movie entry
+                    #     movie_exists.run_time = result['runtime']
+                    #     movie_exists.save()
+                    elif movie_exists is None:
+                        # create new movie entry
+                        Movies.objects.create(**movie_info)
+                    else:
+                        continue # skip
+
+                # go to next page
+                page += 1
+                url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+                response = requests.get(url, headers=headers)
+                response_json = response.json()
+
+        print("===== End of round 1 =====")
+
+    # round 2
+    # 2nd round get based on release date sort by descending (newest to oldest) 
+    if skip_round_2 is False:
+        page = 1
+        release_date_min = "1970-01-01"
+        release_date_max = "2025-12-31"
+        url = f"{base_url}?include_adult=false&language=en-US&primary_release_date.gte={release_date_min}&primary_release_date.lte={release_date_max}&page={page}&sort_by=primary_release_date.desc"
+
+        response = requests.get(url, headers=headers)
+        response_json = response.json()
+
+        if response_json['total_pages'] > 1:
+            print("===== Starting round 2 =====")
+            # get all the pages we can get
+            while page <= max_pages:
+                print("===== Page " + str(page) + " =====")
+
+                # for each result on this page, create new movie entry in database if doesn't already exist
+                for result in response_json['results']:
+                    movie_info = {
+                        'tmdb_id': result['id'],
+                        'imdb_id': "zz" + str(result['id']),
+                        'poster_url': result['poster_path'],
+                        'backdrop_url': result['backdrop_path'],
+                        'title': result['title'][:255],
+                        'rating': result['vote_average'],
+                        'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                        'description': result['overview'][:255],
+                        'origin_location': '',
+                        'languages': result['original_language'],
+                        'imdb_link': '',
+                        #'run_time': result["runtime"],
+                        'last_updated': datetime.now().date(),
+                    }
+
+                    # check if movie doesn't already exist
+                    movie_exists = Movies.objects.filter(tmdb_id=result['id']).first()
+                    if movie_exists and movie_exists.last_updated is not None:
+                        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+                            # update movie entry
+                            movie_exists.tmdb_id = result['id']
+                            movie_exists.poster_url = result['poster_path']
+                            movie_exists.title = result['title']
+                            movie_exists.rating = result['vote_average']
+                            movie_exists.release_date = result['release_date']
+                            movie_exists.description = result['overview'][:255]
+                            movie_exists.last_updated = datetime.now().date()
+                            movie_exists.save()
+                    # elif movie_exists and movie_exists.run_time <= 0:
+                    #     # update movie entry
+                    #     movie_exists.run_time = result['runtime']
+                    #     movie_exists.save()
+                    elif movie_exists is None:
+                        # create new movie entry
+                        Movies.objects.create(**movie_info)
+                    else:
+                        continue # skip
+
+                # go to next page
+                page += 1
+                url = f"{base_url}?include_adult=false&language=en-US&primary_release_date.gte={release_date_min}&primary_release_date.lte={release_date_max}&page={page}&sort_by=primary_release_date.desc"
+                response = requests.get(url, headers=headers)
+                response_json = response.json()
+
+    return True
+
+# get newly released movies from TMDB
+def fetch_movies_new_releases_TMDB():
+    base_url = "https://api.themoviedb.org/3/movie/now_playing"
+    page = 1
+    max_pages = 10 # TMDB limits us to 500 pages
+    movie_list = []
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    # get based on newly released, popular sort by descending (highest popularity to least popularity) 
+
+    print("===== Fetching newly released movies =====")
+    url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if response_json['total_pages'] > 1:
+        # get all the pages we can get
+        while page <= max_pages:
+            #print("===== Page " + str(page) + " =====")
+
+            # for each result on this page, create new movie entry in database if doesn't already exist
+            for result in response_json['results']:
+                movie_info = {
+                    'tmdb_id': result['id'],
+                    'imdb_id': "zz" + str(result['id']),
+                    'poster_url': result['poster_path'],
+                    'backdrop_url': result['backdrop_path'],
+                    'title': result['title'][:255],
+                    'rating': result['vote_average'],
+                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'description': result['overview'][:255],
+                    'origin_location': '',
+                    'languages': result['original_language'],
+                    'imdb_link': '',
+                    'last_updated': datetime.now().date(),
+                    #'genres': [],
+                    'enabled': True,
+                    #'expires': datetime.now(),
+                    #'youtube_trailer': [],
+                    #'run_time': result["runtime"],
+                }
+
+                # check if movie doesn't already exist
+                movie_exists = Movies.objects.prefetch_related(
+                    'youtube_trailer',
+                    'actors_cast',
+                    'director',
+                    'genres',
+                    'reviews'
+                ).filter(tmdb_id=result['id']).first()
+                if movie_exists and movie_exists.last_updated is not None:
+                    if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+                        # update movie entry
+                        movie_exists.tmdb_id = result['id']
+                        movie_exists.poster_url = result['poster_path']
+                        movie_exists.title = result['title']
+                        movie_exists.rating = result['vote_average']
+                        movie_exists.release_date = result['release_date']
+                        movie_exists.description = result['overview'][:255]
+                        #movie_exists.run_time = result['runtime']
+                        movie_exists.last_updated = datetime.now().date()
+                        movie_exists.save()
+
+                    movie_list.append(movie_exists)
+                elif movie_exists is None:
+                    # create new movie entry
+                    movie = Movies.objects.create(**movie_info)
+                    
+                    # assign genres
+                    genres = Genres.objects.filter(tmdb_id__in=result['genre_ids'])
+                    movie.genres.set(genres)
+
+                    # assign trailers
+                    #movie.youtube_trailer.set()
+
+                    movie.save()
+
+                    load_single_movie_data_TMDB(movie.tmdb_id)
+                    movie_full = Movies.objects.prefetch_related(
+                        'youtube_trailer',
+                        'actors_cast',
+                        'director',
+                        'genres',
+                        'reviews'
+                    ).filter(tmdb_id=movie.tmdb_id).first()
+
+                    if movie_full is not None:
+                        movie_list.append(movie_full)
+                else:
+                    continue # skip
+
+            # go to next page
+            page += 1
+            url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+            response = requests.get(url, headers=headers)
+            response_json = response.json()
+
+        print("===== End of newly released movies =====")
+
+    return movie_list
+
+# fetch trending now movies from TMDB (weekly trending)
+def fetch_movies_trending_weekly_TMDB():
+    base_url = "https://api.themoviedb.org/3/trending/movie/week"
+    page = 1
+    max_pages = 10 # TMDB limits us to 500 pages
+    movies_list = []
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print("===== Fetching trending weekly movies =====")
+    url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if response_json['total_pages'] > 1:
+        # get all the pages we can get
+        while page <= max_pages:
+            print("===== Page " + str(page) + " =====")
+
+            # for each result on this page, create new movie entry in database if doesn't already exist
+            for result in response_json['results']:
+                movie_info = {
+                    'tmdb_id': result['id'],
+                    'imdb_id': "zz" + str(result['id']),
+                    'poster_url': result['poster_path'],
+                    'backdrop_url': result['backdrop_path'],
+                    'title': result['title'][:255],
+                    'rating': result['vote_average'],
+                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'description': result['overview'][:255],
+                    'origin_location': '',
+                    'languages': result['original_language'],
+                    'imdb_link': '',
+                    'last_updated': datetime.now().date(),
+                }
+
+                # check if movie doesn't already exist
+                movie_exists = Movies.objects.prefetch_related(
+                    'youtube_trailer',
+                    'actors_cast',
+                    'director',
+                    'genres',
+                    'reviews'
+                ).filter(tmdb_id=result['id']).first()
+                if movie_exists and movie_exists.last_updated is not None:
+                    if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+                        # update movie entry
+                        movie_exists.tmdb_id = result['id']
+                        movie_exists.poster_url = result['poster_path']
+                        movie_exists.title = result['title']
+                        movie_exists.rating = result['vote_average']
+                        movie_exists.release_date = result['release_date']
+                        movie_exists.description = result['overview'][:255]
+                        movie_exists.last_updated = datetime.now().date()
+                        movie_exists.save()
+
+                    movies_list.append(movie_exists)
+                elif movie_exists is None:
+                    # create new movie entry
+                    movie = Movies.objects.create(**movie_info)
+
+                    # assign genres
+                    genres = Genres.objects.filter(tmdb_id__in=result['genre_ids'])
+                    movie.genres.set(genres)
+                    movie.save()
+
+                    load_single_movie_data_TMDB(movie.tmdb_id)
+                    movie_full = Movies.objects.prefetch_related(
+                        'youtube_trailer',
+                        'actors_cast',
+                        'director',
+                        'genres',
+                        'reviews'
+                    ).filter(tmdb_id=movie.tmdb_id).first()
+
+                    if movie_full is not None:
+                        movies_list.append(movie_full)
+                else:
+                    continue # skip
+
+            # go to next page
+            page += 1
+            url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+            response = requests.get(url, headers=headers)
+            response_json = response.json()
+
+        print("===== End of trending weekly movies =====")
+    
+    return movies_list
+
+# fetch top picks today movies from TMDB (today's trending)
+def fetch_movies_trending_daily_TMDB():
+    base_url = "https://api.themoviedb.org/3/trending/movie/day"
+    page = 1
+    max_pages = 10 # TMDB limits us to 500 pages
+    movies_list = []
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print("===== Fetching trending daily movies =====")
+    url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if response_json['total_pages'] > 1:
+        # get all the pages we can get
+        while page <= max_pages:
+            print("===== Page " + str(page) + " =====")
+
+            # for each result on this page, create new movie entry in database if doesn't already exist
+            for result in response_json['results']:
+                movie_info = {
+                    'tmdb_id': result['id'],
+                    'imdb_id': "zz" + str(result['id']),
+                    'poster_url': result['poster_path'],
+                    'backdrop_url': result['backdrop_path'],
+                    'title': result['title'][:255],
+                    'rating': result['vote_average'],
+                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'description': result['overview'][:255],
+                    'origin_location': '',
+                    'languages': result['original_language'],
+                    'imdb_link': '',
+                    'last_updated': datetime.now().date(),
+                    'enabled': True,
+                }
+
+                # check if movie doesn't already exist
+                movie_exists = Movies.objects.prefetch_related(
+                    'youtube_trailer',
+                    'actors_cast',
+                    'director',
+                    'genres',
+                    'reviews'
+                ).filter(tmdb_id=result['id']).first()
+                if movie_exists and movie_exists.last_updated is not None:
+                    if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+                        # update movie entry
+                        movie_exists.tmdb_id = result['id']
+                        movie_exists.poster_url = result['poster_path']
+                        movie_exists.title = result['title']
+                        movie_exists.rating = result['vote_average']
+                        movie_exists.release_date = result['release_date']
+                        movie_exists.description = result['overview'][:255]
+                        movie_exists.last_updated = datetime.now().date()
+                        movie_exists.save()
+
+                    movies_list.append(movie_exists)
+                elif movie_exists is None:
+                    # create new movie entry
+                    movie = Movies.objects.create(**movie_info)
+
+                    # assign genres
+                    genres = Genres.objects.filter(tmdb_id__in=result['genre_ids'])
+                    movie.genres.set(genres)
+                    movie.save()
+
+                    load_single_movie_data_TMDB(movie.tmdb_id)
+                    movie_full = Movies.objects.prefetch_related(
+                        'youtube_trailer',
+                        'actors_cast',
+                        'director',
+                        'genres',
+                        'reviews'
+                    ).filter(tmdb_id=movie.tmdb_id).first()
+
+                    if movie_full is not None:
+                        movies_list.append(movie_full)
+                else:
+                    continue # skip
+
+            # go to next page
+            page += 1
+            url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+            response = requests.get(url, headers=headers)
+            response_json = response.json()
+
+        print("===== End of trending daily movies =====")
+
+    return movies_list
+
+# fetch Laugh Out Loud Comedies (Comedy, Family, Romantic Comedy)
+# fetch Mind-Bending Sci-Fi Journeys (Science Fiction, Fantasy, Adventure)
+# fetch True Stories That Inspire (Documentary, Biographical, Historical)
+# fetch Epic Adventures Await (Action, Adventure, Fantasy)
+# fetch Edge of Your Seat (Action, Adventure, Thriller)
+# fetch Animated Adventures (Animation, Family, Fantasy)
+# fetch Thrills and Chills: Horror Nights (Horror, Thriller, Supernatural)
+# fetch Haunting Ghost Stories (Horror, Supernatural, Thriller)
+# fetch Feel-Good Flicks (Comedy, Drama, Family)
+
+# get movies from TMDB
+def fetch_movie_by_TMDB_id(movie_id):
+    base_url = "https://api.themoviedb.org/3/movie/" + movie_id
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print(f"===== fetching data for {movie_id} =====")
+    url = base_url
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    # for each result on this page, create new movie entry in database if doesn't already exist
+
+    movie_info = {
+        'tmdb_id': response_json['id'],
+        'imdb_id': response_json['imdb_id'],
+        'poster_url': response_json['poster_path'],
+        'backdrop_url': response_json['backdrop_path'],
+        'title': response_json['title'][:255],
+        'rating': response_json['vote_average'],
+        'release_date': '9999-01-01' if response_json['release_date'] == '' else response_json['release_date'],
+        'description': response_json['overview'][:255],
+        'origin_location': '',
+        'languages': response_json['original_language'],
+        'imdb_link': '',
+        'last_updated': datetime.now().date(),
+        'run_time': response_json["runtime"],
+        'status': response_json["status"],
+    }
+
+    # check if movie doesn't already exist
+    movie_exists = Movies.objects.filter(tmdb_id=response_json['id']).first()
+    if movie_exists and movie_exists.last_updated is not None:
+        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+            # update movie entry
+            movie_exists.tmdb_id = response_json['id']
+            movie_exists.poster_url = response_json['poster_path']
+            movie_exists.title = response_json['title']
+            movie_exists.rating = response_json['vote_average']
+            movie_exists.release_date = response_json['release_date']
+            movie_exists.description = response_json['overview'][:255]
+            #movie_exists.run_time = response_json['runtime']
+            movie_exists.last_updated = datetime.now().date()
+            movie_exists.save()
+            return movie_exists
+    elif movie_exists and movie_exists.run_time <= 0:
+        # update movie entry
+        movie_exists.run_time = response_json['runtime']
+        movie_exists.save()
+        return movie_exists
+    elif movie_exists is None:
+        # create new movie entry
+        movie = Movies.objects.create(**movie_info)
+
+        # assign genres
+        genres = Genres.objects.filter(tmdb_id__in=response_json['genre_ids'])
+        movie.genres.set(genres)
+        movie.save()
+
+        load_single_movie_data_TMDB(movie.tmdb_id)
+        movie_full = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=movie.tmdb_id).first()
+
+        if movie_full is not None:
+            return movie_full
+
+# get the details for each movie from TMDB
+def load_movie_data_TMDB():
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+    
+    # get all movies
+    movies = Movies.objects.all()
+
+    print("===== Starting movie detail setup =====")
+    movie_count = 1
+
+    for movie in movies:
+        print(f"===== Movie #{movie_count}: {movie.title}")
+        actor_list = []
+        director_list = []
+        genre_list = []
+        trailer_list = []
+
+        # url to get the details about a movie
+        url = f"https://api.themoviedb.org/3/movie/{movie.tmdb_id}?language=en-US&append_to_response=videos,images,credits"
+        response = requests.get(url, headers=headers)
+        response_json = response.json()
+
+        # update imdb_id
+        if movie.imdb_id is not None and movie.imdb_id != '':
+            if movie.imdb_id == int(movie.imdb_id[2:]):
+                movie.imdb_id = response_json['imdb_id']
+
+        # update status
+        if "status" in response_json:
+            movie.status = response_json['status']
+
+        # update runtime
+        if "runtime" in response_json and movie.run_time <= 0:
+            movie.run_time = response_json['runtime'] 
+
+        # update backdrop
+        if "backdrop_path" in response_json and movie.backdrop_url is None:
+            movie.backdrop_url = response_json['backdrop_path']
+
+        # people credits
+        #credits = []
+        if "credits" in response_json:
+            credits = response_json['credits']
+
+        # trailers
+        #trailers =[]
+        if "videos" in response_json:
+            trailers = response_json['videos']
+
+        # genres
+        #genres = []
+        if "genres" in response_json:
+            genres = response_json['genres']
+
+        # foreach movie get the credits then actors and directors
+        for result in credits['cast']:
+            existing_person = Peoples.objects.filter(tmdb_id=result['id']).first()
+            if existing_person is not None:
+                # check if we already have a many to many relationship with this person for the movie
+                actor_exists = movie.actors_cast.filter(id=existing_person.id).exists()
+                if actor_exists:
+                    continue # skip
+                else:
+                    # add actor to list to create new many to many relationship
+                    if result['known_for_department'] == 'Acting':
+                        if 'job' in result and result['job'] == 'Director':
+                            director_list.append(existing_person)
+                        else:
+                            actor_list.append(existing_person)
+            else:
+                if result['known_for_department'] == 'Acting':
+                    if 'job' in result and result['job'] == 'Director':
+                        # create new people entry for director
+                        new_person = {
+                            'tmdb_id': result['id'],
+                            'name': result['name'],
+                            'original_name': result['original_name'],
+                            'avatar_path': result['profile_path'],
+                            'known_for_department': result['job'],
+                            'popularity': result['popularity'],
+                        }
+                        person = Peoples.objects.create(**new_person)
+                        director_list.append(person)
+                    else:
+                        # create new people entry for actor
+                        new_person = {
+                            'tmdb_id': result['id'],
+                            'name': result['name'],
+                            'original_name': result['original_name'],
+                            'avatar_path': result['profile_path'],
+                            'known_for_department': result['known_for_department'],
+                            'popularity': result['popularity'],
+                        }
+                        person = Peoples.objects.create(**new_person)
+                        actor_list.append(person)
+
+        # foreach movie get the genres
+        for genre in genres:
+            existing_genre = Genres.objects.filter(tmdb_id=genre['id']).first()
+            if existing_genre is not None:
+                # check if we already have a many to many relationship with this genre for the movie
+                genre_exists = movie.genres.filter(id=existing_genre.id).exists()
+                if genre_exists:
+                    continue # skip
+                else:
+                    # add genre to list to create new many to many relationship
+                    genre_list.append(existing_genre)
+            else:
+                # create new genre
+                new_genre = {
+                    'tmdb_id': genre['id'],
+                    'name': genre['name'],
+                    'type': 0,
+                }
+                genre_obj = Genres.objects.create(**new_genre)
+                genre_list.append(genre_obj)
+        
+        # foreach movie get the trailers
+        for trailer in trailers['results']:
+            existing_trailer = Trailers.objects.filter(video_id=trailer['id']).first()
+            if existing_trailer is not None:
+                # check if we already have a many to many relationship with this trailer for the movie
+                trailer_exists = movie.youtube_trailer.filter(id=existing_trailer.id).exists()
+                if trailer_exists:
+                    continue # skip
+                else:
+                    # add trailer to list to create new many to many relationship
+                    trailer_list.append(existing_trailer)
+            else:
+                # create a new trailer
+                new_trailer = {
+                    'name': trailer['name'],
+                    'key': trailer['key'],
+                    'site': trailer['site'],
+                    'quality': trailer['size'],
+                    'type': trailer['type'],
+                    'official': trailer['official'],
+                    'published_at': trailer['published_at'],
+                    'video_id': trailer['id'],
+                }
+                trailer_obj = Trailers.objects.create(**new_trailer)
+                trailer_list.append(trailer_obj)
+
+        # update movie foreign keys/many to many relationships
+        if len(actor_list) > 0:
+            movie.actors_cast.set(actor_list)
+
+        if len(director_list) > 0:
+            movie.director.set(director_list)
+
+        if len(trailer_list) > 0:
+            movie.youtube_trailer.set(trailer_list)
+
+        if len(genre_list) > 0:
+            movie.genres.set(genre_list)
+
+        movie.save()
+        movie_count += 1
+
+    return True
+
+def create_new_movie(movie_info):
+    # check if movie doesn't already exist
+    movie_exists = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(tmdb_id=movie_info['tmdb_id']).first()
+    if movie_exists and movie_exists.last_updated is not None:
+        if calculate_day_difference(movie_exists.last_updated.strftime('%Y-%m-%d'), 7):
+            # update movie entry
+            movie_exists.tmdb_id = movie_info['tmdb_id']
+            movie_exists.poster_url = movie_info['poster_url']
+            movie_exists.title = movie_info['title']
+            movie_exists.rating = movie_info['rating']
+            movie_exists.release_date = movie_info['release_date']
+            movie_exists.description = movie_info['description'][:255]
+            #movie_exists.run_time = result['runtime']
+            movie_exists.last_updated = datetime.now().date()
+            movie_exists.save()
+            return movie_exists
+    elif movie_exists:
+        return movie_exists
+    elif movie_exists is None:
+        # create new movie entry
+        new_movie = Movies.objects.create(**movie_info)
+        new_movie_full = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=movie_info['tmdb_id']).first() 
+        return new_movie_full
+    
+# get the details for a movie from TMDB
+def load_single_movie_data_TMDB(tmdb_id):
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+    
+    # get all movies
+    movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+    if movie is None:
+        return False
+
+    actor_list = []
+    director_list = []
+    genre_list = []
+    trailer_list = []
+
+    # url to get the details about a movie
+    url = f"https://api.themoviedb.org/3/movie/{movie.tmdb_id}?language=en-US&append_to_response=videos,images,credits"
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    # update imdb_id
+    if movie.imdb_id is not None and movie.imdb_id != '':
+        if movie.imdb_id == int(movie.imdb_id[2:]):
+            movie.imdb_id = response_json['imdb_id']
+
+    # update status
+    if "status" in response_json:
+        movie.status = response_json['status']
+
+    # update runtime
+    if "runtime" in response_json and movie.run_time <= 0:
+        movie.run_time = response_json['runtime'] 
+
+    # update backdrop
+    if "backdrop_path" in response_json and movie.backdrop_url is None:
+        movie.backdrop_url = response_json['backdrop_path']
+
+    # people credits
+    #credits = []
+    if "credits" in response_json:
+        credits = response_json['credits']
+
+    # trailers
+    #trailers =[]
+    if "videos" in response_json:
+        trailers = response_json['videos']
+
+    # genres
+    #genres = []
+    if "genres" in response_json:
+        genres = response_json['genres']
+
+    # foreach movie get the credits then actors and directors
+    for result in credits['cast']:
+        existing_person = Peoples.objects.filter(tmdb_id=result['id']).first()
+        if existing_person is not None:
+            # check if we already have a many to many relationship with this person for the movie
+            actor_exists = movie.actors_cast.filter(id=existing_person.id).exists()
+            if actor_exists:
+                continue # skip
+            else:
+                # add actor to list to create new many to many relationship
+                if result['known_for_department'] == 'Acting':
+                    if 'job' in result and result['job'] == 'Director':
+                        director_list.append(existing_person)
+                    else:
+                        actor_list.append(existing_person)
+        else:
+            if result['known_for_department'] == 'Acting':
+                if 'job' in result and result['job'] == 'Director':
+                    # create new people entry for director
+                    new_person = {
+                        'tmdb_id': result['id'],
+                        'name': result['name'],
+                        'original_name': result['original_name'],
+                        'avatar_path': result['profile_path'],
+                        'known_for_department': result['job'],
+                        'popularity': result['popularity'],
+                    }
+                    person = Peoples.objects.create(**new_person)
+                    director_list.append(person)
+                else:
+                    # create new people entry for actor
+                    new_person = {
+                        'tmdb_id': result['id'],
+                        'name': result['name'],
+                        'original_name': result['original_name'],
+                        'avatar_path': result['profile_path'],
+                        'known_for_department': result['known_for_department'],
+                        'popularity': result['popularity'],
+                    }
+                    person = Peoples.objects.create(**new_person)
+                    actor_list.append(person)
+
+    # foreach movie get the genres
+    for genre in genres:
+        existing_genre = Genres.objects.filter(tmdb_id=genre['id']).first()
+        if existing_genre is not None:
+            # check if we already have a many to many relationship with this genre for the movie
+            genre_exists = movie.genres.filter(id=existing_genre.id).exists()
+            if genre_exists:
+                continue # skip
+            else:
+                # add genre to list to create new many to many relationship
+                genre_list.append(existing_genre)
+        else:
+            # create new genre
+            new_genre = {
+                'tmdb_id': genre['id'],
+                'name': genre['name'],
+                'type': 0,
+            }
+            genre_obj = Genres.objects.create(**new_genre)
+            genre_list.append(genre_obj)
+    
+    # foreach movie get the trailers
+    for trailer in trailers['results']:
+        existing_trailer = Trailers.objects.filter(video_id=trailer['id']).first()
+        if existing_trailer is not None:
+            # check if we already have a many to many relationship with this trailer for the movie
+            trailer_exists = movie.youtube_trailer.filter(id=existing_trailer.id).exists()
+            if trailer_exists:
+                continue # skip
+            else:
+                # add trailer to list to create new many to many relationship
+                trailer_list.append(existing_trailer)
+        else:
+            # create a new trailer
+            new_trailer = {
+                'name': trailer['name'],
+                'key': trailer['key'],
+                'site': trailer['site'],
+                'quality': trailer['size'],
+                'type': trailer['type'],
+                'official': trailer['official'],
+                'published_at': trailer['published_at'],
+                'video_id': trailer['id'],
+            }
+            trailer_obj = Trailers.objects.create(**new_trailer)
+            trailer_list.append(trailer_obj)
+
+    # update movie foreign keys/many to many relationships
+    if len(actor_list) > 0:
+        movie.actors_cast.set(actor_list)
+
+    if len(director_list) > 0:
+        movie.director.set(director_list)
+
+    if len(trailer_list) > 0:
+        movie.youtube_trailer.set(trailer_list)
+
+    if len(genre_list) > 0:
+        movie.genres.set(genre_list)
+
+    movie.save()
+
+    return True
