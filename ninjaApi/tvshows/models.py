@@ -10,6 +10,7 @@ class TVShows(models.Model):
     tmdb_id = models.IntegerField(unique=True)
     imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
     poster_url = models.CharField(max_length=255, null=True, blank=True)
+    backdrop_url = models.CharField(max_length=255, null=True, blank=True)
     title = models.CharField(max_length=255)
     rating = models.DecimalField(decimal_places=1, max_digits=4, null=True, blank=True)
     release_date = models.DateField(null=True, blank=True)

@@ -316,25 +316,25 @@ def create_person(request, payload: People):
     return {"id": person.id}
 
 # get person by id
-@router.get("/people/id/{id}", response=PeopleOut)
+@router.get("/id/{id}", response=PeopleOut)
 def get_person_by_id(request, id: str):
     person = get_object_or_404(Peoples, id=id)
     return person
 
 # get person by tmdb_id
-@router.get("/people/tmdb_id/{tmdb_id}", response=PeopleOut)
+@router.get("/tmdb_id/{tmdb_id}", response=PeopleOut)
 def get_person_by_tmdb_id(request, tmdb_id: str):
     person = get_object_or_404(Peoples, tmdb_id=tmdb_id)
     return person
 
 # list all people
-@router.get("/people/", response=List[PeopleOut])
+@router.get("/", response=List[PeopleOut])
 def list_all_people(request):
     people_list = Peoples.objects.all()
     return people_list
 
 # update person by id
-@router.put("/people/id/{id}")
+@router.put("/id/{id}")
 def update_person_by_id(request, id: str, payload: PeopleOut):
     person = get_object_or_404(Peoples, id=id)
     for attr, value in payload.dict().items():
@@ -343,7 +343,7 @@ def update_person_by_id(request, id: str, payload: PeopleOut):
     return {"success": True}
 
 # update person by tmdb_id
-@router.put("/people/tmdb_id/{tmdb_id}")
+@router.put("/tmdb_id/{tmdb_id}")
 def update_person_by_tmdb_id(request, tmdb_id: str, payload: PeopleOut):
     person = get_object_or_404(Peoples, tmdb_id=tmdb_id)
     for attr, value in payload.dict().items():
@@ -352,7 +352,7 @@ def update_person_by_tmdb_id(request, tmdb_id: str, payload: PeopleOut):
     return {"success": True}
 
 # delete/disable person by id
-@router.delete("/people/id/{id}")
+@router.delete("/id/{id}")
 def delete_person_by_id(request, id: str):
     person = get_object_or_404(Peoples, id=id)
     #person.delete()
@@ -362,7 +362,7 @@ def delete_person_by_id(request, id: str):
     return {"success": True}
 
 # delete/disable person by tmdb_id
-@router.delete("/people/tmdb_id/{tmdb_id}")
+@router.delete("/tmdb_id/{tmdb_id}")
 def delete_person_by_tmdb_id(request, tmdb_id: str):
     person = get_object_or_404(Peoples, tmdb_id=tmdb_id)
     #person.delete()

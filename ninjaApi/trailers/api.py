@@ -227,25 +227,25 @@ def create_trailer(request, payload: Trailer):
     return {"id": trailer.id}
 
 # get trailer by id
-@router.get("/trailers/id/{id}", response=TrailerOut)
+@router.get("/id/{id}", response=TrailerOut)
 def get_trailer_by_id(request, id: str):
     trailer = get_object_or_404(Trailers, id=id)
     return trailer
 
 # get trailer by tmdb_id
-@router.get("/trailers/tmdb_id/{tmdb_id}", response=TrailerOut)
+@router.get("/tmdb_id/{tmdb_id}", response=TrailerOut)
 def get_trailer_by_tmdb_id(request, tmdb_id: int):
     trailer = get_object_or_404(Trailers, tmdb_id=tmdb_id)
     return trailer
 
 # list all trailers
-@router.get("/trailers/", response=List[TrailerOut])
+@router.get("/", response=List[TrailerOut])
 def list_all_trailers(request):
     trailer_list = Trailers.objects.all()
     return trailer_list
 
 # update trailer by id
-@router.put("/trailers/id/{id}")
+@router.put("/id/{id}")
 def update_trailer_by_id(request, id: str, payload: TrailerOut):
     trailer = get_object_or_404(Trailers, id=id)
     for attr, value in payload.dict().items():
@@ -254,7 +254,7 @@ def update_trailer_by_id(request, id: str, payload: TrailerOut):
     return {"success": True}
 
 # update trailer by tmdb_id
-@router.put("/trailers/tmdb_id/{tmdb_id}")
+@router.put("/tmdb_id/{tmdb_id}")
 def update_trailer_by_tmdb_id(request, tmdb_id: int, payload: TrailerOut):
     trailer = get_object_or_404(Trailers, tmdb_id=tmdb_id)
     for attr, value in payload.dict().items():
@@ -263,7 +263,7 @@ def update_trailer_by_tmdb_id(request, tmdb_id: int, payload: TrailerOut):
     return {"success": True}
 
 # delete/disable trailer by id
-@router.delete("/trailers/id/{id}")
+@router.delete("/id/{id}")
 def delete_trailer_by_id(request, id: str):
     trailer = get_object_or_404(Trailers, id=id)
     #trailer.delete()
@@ -273,7 +273,7 @@ def delete_trailer_by_id(request, id: str):
     return {"success": True}
 
 # delete/disable trailer by tmdb_id
-@router.delete("/trailers/tmdb_id/{tmdb_id}")
+@router.delete("/tmdb_id/{tmdb_id}")
 def delete_trailer_by_tmdb_id(request, tmdb_id: int):
     trailer = get_object_or_404(Trailers, tmdb_id=tmdb_id)
     #trailer.delete()

@@ -23,12 +23,12 @@ router = Router()
 class TVShow(Schema):
     tmdb_id: int
     imdb_id: str
-    poster_url: str
+    poster_url: str | None = None
     title: str
-    rating: float
+    rating: float | None = None
     release_date: date
     description: str
-    origin_location: str
+    origin_location: str | None = None
     languages: str
     imdb_link: str
     youtube_trailer: List[Trailer]
@@ -37,27 +37,41 @@ class TVShow(Schema):
     genres: List[Genre]
     seasons: int
     enabled: bool
-    expires: datetime
+    expires: datetime | None = None
+
+class TVShowRecommendations(Schema):
+    tmdb_id: int
+    imdb_id: str | None = None
+    poster_url: str | None = None
+    title: str
+    rating: float
+    release_date: date
+    description: str
+    genres: List[int] | None = None
+    languages: str
+    media_type: str
+    #run_time: int
 
 class TVShowOut(Schema):
     id: UUID
     tmdb_id: int
     imdb_id: str
-    poster_url: str
+    poster_url: str | None = None
     title: str
-    rating: float
+    rating: float | None = None
     release_date: date
     description: str
-    origin_location: str
+    origin_location: str | None = None
     languages: str
     imdb_link: str
     youtube_trailer: List[Trailer]
     actors_cast: List[People]
     director: List[People]
     genres: List[Genre]
+    recommendations: List[TVShowRecommendations] | None = None
     seasons: int
     enabled: bool
-    expires: datetime
+    expires: datetime | None = None
 
 ################################
 # API CONTROLLER METHODS
@@ -69,6 +83,150 @@ def tvshows_seeding(request):
     skip_round_1 = False
     skip_round_2 = True
 
+    # TODO fetch data from other sources too
+    fetch_new_tvshows_TMDB(skip_round_1, skip_round_2)
+    return {"success": True}
+   #return response.json()
+
+### initial data loading ##
+@router.get("/seeding/data")
+def tvshows_data_loading(request):
+    # TODO load data from other sources too
+    load_tv_data_TMDB()
+    return {"success": True}
+
+# create new tv show
+@router.post("/", auth=None)
+def create_tv_show(request, payload: TVShow):
+    tv_show = TVShows.objects.create(**payload.dict())
+    return {"id": tv_show.id}
+
+# get tv show by id
+@router.get("/id/{id}", response=TVShowOut)
+def get_tv_show_by_id(request, id: str):
+    tv_show = get_object_or_404(TVShows, id=id)
+    tv_show.recommendations = get_tv_recommendations_logic_TMDB(id)
+    return tv_show
+
+# get tv show by tmdb_id
+@router.get("/tmdb_id/{tmdb_id}", response=TVShowOut)
+def get_tv_by_tmdb_id(request, tmdb_id: int):
+    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
+    tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
+    return tv_show
+
+# get tv show by imdb_id
+@router.get("/imdb_id/{imdb_id}", response=TVShowOut)
+def get_tv_show_by_imdb_id(request, imdb_id: str):
+    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
+    tv_show.recommendations = get_tv_recommendations_logic_TMDB(imdb_id)
+    return tv_show
+
+# list all tv shows
+@router.get("/", response=List[TVShowOut])
+def list_all_tv_shows(request):
+    tv_show_list = TVShows.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).all()[:999]
+    return tv_show_list
+
+# list all tv show that contain a str in their title
+@router.get("/title/{title_str}", response=List[TVShowOut])
+def get_tvshows_by_title(request, title_str: str):
+    shows_list = TVShows.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(title__icontains=title_str)[:999]
+    return shows_list
+
+# update tv show by id
+@router.put("/id/{id}")
+def update_tv_show_by_id(request, id: str, payload: TVShowOut):
+    tv_show = get_object_or_404(TVShows, id=id)
+    for attr, value in payload.dict().items():
+        setattr(tv_show, attr, value)
+    tv_show.save()
+    return {"success": True}
+
+# update tv show by tmdb_id
+@router.put("/tmdb_id/{tmdb_id}")
+def update_tv_show_by_tmdb_id(request, tmdb_id: int, payload: TVShowOut):
+    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
+    for attr, value in payload.dict().items():
+        setattr(tv_show, attr, value)
+    tv_show.save()
+    return {"success": True}
+
+# update tv show by imdb_id
+@router.put("/imdb_id/{imdb_id}")
+def update_tv_show_by_imdb_id(request, imdb_id: str, payload: TVShowOut):
+    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
+    for attr, value in payload.dict().items():
+        setattr(tv_show, attr, value)
+    tv_show.save()
+    return {"success": True}
+
+# delete/disable movie by id
+@router.delete("/id/{id}")
+def delete_tv_show_by_id(request, id: str):
+    tv_show = get_object_or_404(TVShows, id=id)
+    #tv_show.delete()
+    tv_show.enabled = False
+    tv_show.archived = True
+    tv_show.save()
+    return {"success": True}
+
+# delete/disable tv show by tmdb_id
+@router.delete("/tmdb_id/{tmdb_id}")
+def delete_tv_show_by_tmdb_id(request, tmdb_id: int):
+    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
+    #tv_show.delete()
+    tv_show.enabled = False
+    tv_show.archived = True
+    tv_show.save()
+    return {"success": True}
+
+# delete/disable tv show by imdb_id
+@router.delete("/imdb_id/{imdb_id}")
+def delete_tv_show_by_imdb_id(request, imdb_id: str):
+    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
+    #tv_show.delete()
+    tv_show.enabled = False
+    tv_show.archived = True
+    tv_show.save()
+    return {"success": True}
+
+# get all recommendations/similiar tv shows for a tv show
+@router.get("/{tmdb_id}/recommended/", response=List[TVShowRecommendations])
+def get_tv_recommendations(request, tmdb_id: str):
+    # TODO: make this more robust and possibly use AI to get better recommendations
+
+    tv_found = False
+
+   # try tmdb id
+    tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+    if tv_show is not None:
+        tv_found = True
+            
+    if tv_found == False:
+        return {"Message": "TV show not found"}
+
+    return get_tv_recommendations_logic_TMDB(tmdb_id)
+
+
+#################################
+# HELPERS
+#################################
+
+# fetch new tv shows from TMDB
+def fetch_new_tvshows_TMDB(skip_round_1=False, skip_round_2=True):
     # get tv shows
     base_url = "https://api.themoviedb.org/3/discover/tv"
     page = 1
@@ -196,12 +354,69 @@ def tvshows_seeding(request):
                 response = requests.get(url, headers=headers)
                 response_json = response.json()
 
-    return {"success": True}
-   #return response.json()
+    return True
 
-### initial data loading ##
-@router.get("/seeding/data")
-def tvshows_data_loading(request):
+
+# get recommendations for the tv show specified
+def get_tv_recommendations_logic_TMDB(series_id):
+    recommendation_list = []
+
+    # get movies
+    base_url = f"https://api.themoviedb.org/3/tv/{series_id}/recommendations"
+    page = 1
+    max_pages = 10 # TMDB limits us to 500 pages
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print(f"===== Getting recommendations for {series_id} =====")
+    url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+    #url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if response_json['total_pages'] > 1:
+        # get all the pages we can get
+        while page <= max_pages:
+            #print("===== Page " + str(page) + " =====")
+
+            # for each result on this page, create new movie entry in database if doesn't already exist
+            for result in response_json['results']:
+                movie_info = {
+                    'tmdb_id': result['id'],
+                    #'imdb_id': "zz" + str(result['id']),
+                    'poster_url': result['poster_path'],
+                    'title': result['name'][:255],
+                    'rating': result['vote_average'],
+                    'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
+                    'description': result['overview'][:255],
+                    'origin_location': '',
+                    'languages': result['original_language'],
+                    'genres': result['genre_ids'],
+                    #'last_updated': datetime.now().date(),
+                    'run_time': 0,
+                    'media_type': result['media_type'],
+                }
+                recommendation_list.append(movie_info)
+
+            # go to next page
+            page += 1
+            url = f"{base_url}?include_adult=false&language=en-US&page={page}&sort_by=popularity.desc"
+            #url = f"{base_url}?include_adult=false&language=en-US&page={page}"
+            response = requests.get(url, headers=headers)
+            response_json = response.json()
+
+    print("===== End of recommendations =====")
+    
+    return recommendation_list
+
+
+# load data for tv shows from TMDB
+def load_tv_data_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
@@ -351,92 +566,5 @@ def tvshows_data_loading(request):
 
         tvshow.save()
         tvshow_count += 1
-    
-    return {"success": True}
 
-# create new tv show
-@router.post("/", auth=None)
-def create_tv_show(request, payload: TVShow):
-    tv_show = TVShows.objects.create(**payload.dict())
-    return {"id": tv_show.id}
-
-# get tv show by id
-@router.get("/tv/id/{id}", response=TVShowOut)
-def get_tv_show_by_id(request, id: str):
-    tv_show = get_object_or_404(TVShows, id=id)
-    return tv_show
-
-# get tv show by tmdb_id
-@router.get("/tv/tmdb_id/{tmdb_id}", response=TVShowOut)
-def get_tv_by_tmdb_id(request, tmdb_id: int):
-    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
-    return tv_show
-
-# get tv show by imdb_id
-@router.get("/tv/imdb_id/{imdb_id}", response=TVShowOut)
-def get_tv_show_by_imdb_id(request, imdb_id: str):
-    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
-    return tv_show
-
-# list all tv shows
-@router.get("/tv/", response=List[TVShowOut])
-def list_all_tv_shows(request):
-    tv_show_list = TVShows.objects.all()
-    return tv_show_list
-
-# update tv show by id
-@router.put("/tv/id/{id}")
-def update_tv_show_by_id(request, id: str, payload: TVShowOut):
-    tv_show = get_object_or_404(TVShows, id=id)
-    for attr, value in payload.dict().items():
-        setattr(tv_show, attr, value)
-    tv_show.save()
-    return {"success": True}
-
-# update tv show by tmdb_id
-@router.put("/tv/tmdb_id/{tmdb_id}")
-def update_tv_show_by_tmdb_id(request, tmdb_id: int, payload: TVShowOut):
-    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
-    for attr, value in payload.dict().items():
-        setattr(tv_show, attr, value)
-    tv_show.save()
-    return {"success": True}
-
-# update tv show by imdb_id
-@router.put("/tv/imdb_id/{imdb_id}")
-def update_tv_show_by_imdb_id(request, imdb_id: str, payload: TVShowOut):
-    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
-    for attr, value in payload.dict().items():
-        setattr(tv_show, attr, value)
-    tv_show.save()
-    return {"success": True}
-
-# delete/disable movie by id
-@router.delete("/tv/id/{id}")
-def delete_tv_show_by_id(request, id: str):
-    tv_show = get_object_or_404(TVShows, id=id)
-    #tv_show.delete()
-    tv_show.enabled = False
-    tv_show.archived = True
-    tv_show.save()
-    return {"success": True}
-
-# delete/disable tv show by tmdb_id
-@router.delete("/tv/tmdb_id/{tmdb_id}")
-def delete_tv_show_by_tmdb_id(request, tmdb_id: int):
-    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
-    #tv_show.delete()
-    tv_show.enabled = False
-    tv_show.archived = True
-    tv_show.save()
-    return {"success": True}
-
-# delete/disable tv show by imdb_id
-@router.delete("/tv/imdb_id/{imdb_id}")
-def delete_tv_show_by_imdb_id(request, imdb_id: str):
-    tv_show = get_object_or_404(TVShows, imdb_id=imdb_id)
-    #tv_show.delete()
-    tv_show.enabled = False
-    tv_show.archived = True
-    tv_show.save()
-    return {"success": True}
+    return True
