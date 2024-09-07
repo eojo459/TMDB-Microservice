@@ -113,7 +113,7 @@ def tvshows_data_loading(request):
     return {"success": True}
 
 @router.get("/seeding/data/{tmdb_id}")
-def tvshows_data_loading(request, tmdb_id: int):
+def tvshows_data_loading_single(request, tmdb_id: int):
     # TODO load data from other sources too
     load_single_tv_show_data_TMDB(tmdb_id)
     return {"success": True}
@@ -274,6 +274,17 @@ def get_trending_movies_daily_TMDB(request):
 @router.get("/trending/weekly/", response=List[TVShowOut])
 def get_trending_movies_weekly_TMDB(request):
     return fetch_tv_shows_trending_weekly_TMDB()
+
+# delete all tv show episodes
+@router.delete("/delete/episodes/all/")
+def delete_tv_show_by_imdb_id(request):
+    all_tv_shows = Episodes.objects.all()
+
+    for tv_show in all_tv_shows:
+        tv_show.delete()
+
+    return {"success": True}
+
 
 #################################
 # HELPERS
@@ -814,6 +825,7 @@ def fetch_episodes_for_season_TMDB(tmdb_id, season_number):
             episode_info = {
                 'tmdb_id': episode['id'],
                 'tv_show_tmdb_id': episode['show_id'],
+                'tv_show_id': tv_show,
                 'release_date': episode['air_date'],
                 'episode_number': episode['episode_number'],
                 'name': episode['name'][:255],
@@ -839,14 +851,11 @@ def fetch_episodes_for_season_TMDB(tmdb_id, season_number):
                     episode_exists.description = episode['overview'][:255]
                     episode_exists.save()
 
-                episode_list.append(episode_exists)
+                #episode_list.append(episode_exists)
             elif episode_exists is None:
                 # create new episode entry
                 episode = Episodes.objects.create(**episode_info)
-                episode.tv_show_id.add(tv_show)
-                episode.save()
-
-                episode_list.append(episode)
+                #episode_list.append(episode)
             else:
                 continue # skip
 
@@ -1164,3 +1173,7 @@ def fetch_tv_shows_trending_daily_TMDB():
         print("===== End of trending daily tv shows =====")
 
     return tv_show_list
+
+
+# TODO: fetch popular tv shows from TMDB https://api.themoviedb.org/3/tv/popular
+# TODO: fetch top rated tv shows from TMDB https://api.themoviedb.org/3/tv/top_rated
