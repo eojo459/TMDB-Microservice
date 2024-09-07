@@ -27,5 +27,5 @@ class Movies(models.Model):
     enabled = models.BooleanField(default=True)
     archived = models.BooleanField(default=False)
     expires = models.DateTimeField(null=True, blank=True)
-    last_updated = models.DateTimeField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
     status = models.CharField(max_length=50, null=True, blank=True)
