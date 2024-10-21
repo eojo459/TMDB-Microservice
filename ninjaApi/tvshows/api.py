@@ -88,7 +88,23 @@ class TVShowOut(Schema):
     episodes: List[TVShowEpisode] | None = None
     seasons: int
     enabled: bool
+    media_type: str | None = None
     expires: datetime | None = None
+
+class Season(Schema):
+    tmdb_id: int
+    air_date: date | None = None
+    episode_number: int
+    name: str
+    overview: str
+    runtime: int | None = None
+    season_number: int
+    show_id: int
+    still_path: str | None = None
+    vote_average: float | None = None
+    vote_count: int | None = None
+
+
 
 ################################
 # API CONTROLLER METHODS
@@ -264,15 +280,15 @@ def get_tv_recommendations(request, tmdb_id: str):
 
 
 @router.get("/newly-released/", response=List[TVShowOut])
-def get_newly_released_movies_TMDB(request):
+def get_newly_released_tv_shows_TMDB(request):
     return fetch_tv_shows_new_releases_TMDB()
 
 @router.get("/trending/daily/", response=List[TVShowOut])
-def get_trending_movies_daily_TMDB(request):
+def get_trending_tv_shows_daily_TMDB(request):
     return fetch_tv_shows_trending_daily_TMDB()
 
 @router.get("/trending/weekly/", response=List[TVShowOut])
-def get_trending_movies_weekly_TMDB(request):
+def get_trending_tv_shows_weekly_TMDB(request):
     return fetch_tv_shows_trending_weekly_TMDB()
 
 # delete all tv show episodes
@@ -285,6 +301,15 @@ def delete_tv_show_by_imdb_id(request):
 
     return {"success": True}
 
+# get episode data for a tv show
+@router.get("/tmdb_id/{tmdb_id}/season/{season_number}/episode/{episode_number}", response=List[Season])
+def get_tv_shows_season_episode_TMDB(request, tmdb_id: int, season_number: int, episode_number: int):
+    return get_tv_season_episodes_TMDB(tmdb_id, season_number, episode_number)
+
+# get all episodes in a season for a tv show
+@router.get("/tmdb_id/{tmdb_id}/season/{season_number}", response=List[Season])
+def get_tv_shows_season_TMDB(request, tmdb_id: int, season_number: int):
+    return get_tv_season_episodes_TMDB(tmdb_id, season_number)
 
 #################################
 # HELPERS
@@ -327,11 +352,7 @@ def fetch_new_tvshows_TMDB(skip_round_1=False, skip_round_2=True):
                         'rating': result['vote_average'],
                         'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
                         'description': result['overview'][:255],
-                        'origin_location': '',
                         'languages': result['original_language'],
-                        'imdb_link': '',
-                        'last_updated': datetime.now().date(),
-                        'seasons': 0,
                     }
 
                     # check if tv show doesn't already exist
@@ -896,20 +917,13 @@ def fetch_tv_shows_new_releases_TMDB():
                     'tmdb_id': result['id'],
                     'imdb_id': "zz" + str(result['id']),
                     'poster_url': result['poster_path'],
-                    'backdrop_url': result['backdrop_path'],
-                    'title': result['title'][:255],
+                    'title': result['name'][:255],
                     'rating': result['vote_average'],
-                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
                     'description': result['overview'][:255],
-                    'origin_location': '',
                     'languages': result['original_language'],
                     'imdb_link': '',
-                    'last_updated': datetime.now().date(),
-                    #'genres': [],
-                    'enabled': True,
-                    #'expires': datetime.now(),
-                    #'youtube_trailer': [],
-                    #'run_time': result["runtime"],
+                    'origin_location': '',
                 }
 
                 # check if movie doesn't already exist
@@ -923,14 +937,11 @@ def fetch_tv_shows_new_releases_TMDB():
                 if tv_show_exists and tv_show_exists.last_updated is not None:
                     if calculate_day_difference(tv_show_exists.last_updated.strftime('%Y-%m-%d'), 7):
                         # update movie entry
-                        tv_show_exists.tmdb_id = result['id']
                         tv_show_exists.poster_url = result['poster_path']
-                        tv_show_exists.title = result['title']
+                        tv_show_exists.title = result['name']
                         tv_show_exists.rating = result['vote_average']
-                        tv_show_exists.release_date = result['release_date']
+                        tv_show_exists.release_date = result['first_air_date']
                         tv_show_exists.description = result['overview'][:255]
-                        #movie_exists.run_time = result['runtime']
-                        tv_show_exists.last_updated = datetime.now().date()
                         tv_show_exists.save()
 
                     # get episodes
@@ -1013,9 +1024,9 @@ def fetch_tv_shows_trending_weekly_TMDB():
                     'rating': result['vote_average'],
                     'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
                     'description': result['overview'][:255],
-                    'origin_location': '',
                     'languages': result['original_language'],
                     'imdb_link': '',
+                    'origin_location': '',
                 }
 
                 # check if tv show doesn't already exist
@@ -1110,9 +1121,9 @@ def fetch_tv_shows_trending_daily_TMDB():
                     'rating': result['vote_average'],
                     'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
                     'description': result['overview'][:255],
-                    'origin_location': '',
                     'languages': result['original_language'],
                     'imdb_link': '',
+                    'origin_location': '',
                 }
 
                 # check if tv show doesn't already exist
@@ -1173,6 +1184,63 @@ def fetch_tv_shows_trending_daily_TMDB():
         print("===== End of trending daily tv shows =====")
 
     return tv_show_list
+
+
+# get season episodes for the tv show
+def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None):
+    episode_list = []
+
+    if episode_number is not None:
+        url = f"https://api.themoviedb.org/3/tv/{series_id}/season/{season_number}/episode/{episode_number}"
+    else:
+        # get all episodes in the season
+        url = f"https://api.themoviedb.org/3/tv/{series_id}/season/{season_number}"
+
+    # set headers
+    headers = {
+        "accept": "application/json",
+        "Authorization": config('TMDB_API_TOKEN'),
+    }
+
+    print(f"===== Getting season {season_number} for {series_id} =====")
+
+    response = requests.get(url, headers=headers)
+    response_json = response.json()
+
+    if episode_number is not None:
+        episode_info = {
+            'tmdb_id': response_json['id'],
+            'episode_number': response_json['episode_number'],
+            'name': response_json['name'][:255],
+            'overview': response_json['overview'][:255],
+            'runtime': response_json['runtime'],
+            'season_number': response_json['season_number'],
+            'show_id': series_id,
+            'still_path': response_json['still_path'],
+            'vote_average': response_json['vote_average'],
+            'vote_count': response_json['vote_count'],
+        }
+        episode_list.append(episode_info)
+    else:
+        # for each episode
+        for episode in response_json['episodes']:
+            episode_info = {
+                'tmdb_id': episode['id'],
+                'episode_number': episode['episode_number'],
+                'name': episode['name'][:255],
+                'overview': episode['overview'][:255],
+                'runtime': episode['runtime'],
+                'season_number': episode['season_number'],
+                'show_id': episode['show_id'],
+                'still_path': episode['still_path'],
+                'vote_average': episode['vote_average'],
+                'vote_count': episode['vote_count'],
+            }
+            episode_list.append(episode_info)
+
+    print("===== End of seasons =====")
+    
+    return episode_list
 
 
 # TODO: fetch popular tv shows from TMDB https://api.themoviedb.org/3/tv/popular
