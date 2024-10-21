@@ -17,7 +17,8 @@
             "request": "launch",
             "program": "${workspaceFolder}//ninjaApi//manage.py",
             "args": [
-                "runserver"
+                "runserver",
+                "127.0.0.1:8001"
             ],
             "django": true,
             "justMyCode": true

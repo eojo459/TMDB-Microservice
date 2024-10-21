@@ -33,7 +33,7 @@ class TVShows(models.Model):
 class Episodes(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
     tmdb_id = models.IntegerField(unique=True)
-    tv_show_id = models.ManyToManyField(TVShows, null=True, blank=True, related_name='tv_show_id') # FK to TVShows
+    tv_show_id = models.ForeignKey(TVShows, related_name='tv_show_id', on_delete=models.CASCADE) # FK to TVShows
     tv_show_tmdb_id = models.IntegerField(null=True, blank=True)
     still_path = models.CharField(max_length=255, null=True, blank=True)
     name = models.CharField(max_length=255)

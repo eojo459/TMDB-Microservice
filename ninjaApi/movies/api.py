@@ -10,6 +10,8 @@ from movies.models import Movies
 from genres.api import Genre, GenreOut
 from backendApi.utils.helper import calculate_day_difference
 from genres.models import Genres
+from tvshows.api import TVShowOut
+from tvshows.models import TVShows
 from people.models import Peoples
 from trailers.models import Trailers
 from people.api import People, PeopleOut
@@ -91,6 +93,7 @@ class MovieOutFull(Schema):
     recommendations: List[MovieRecommendations] = None
     run_time: int | None = None
     enabled: bool | None = None
+    media_type: str | None = None
     #expires: datetime
 
 ################################
@@ -216,6 +219,37 @@ def get_movies_by_name(request, title_str: str):
     ).filter(title__icontains=title_str)[:100]
 
     return movies_list
+
+# list all movies and tv shows that contain a str in their title
+@router.get("/all/title/{title_str}", response=List[MovieOutFull | TVShowOut])
+def get_all_by_name(request, title_str: str):
+    all_list = []
+
+    movies_list = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(title__icontains=title_str)[:100]
+
+    for movie in movies_list:
+        movie.media_type = "movie"
+        all_list.append(movie)
+
+    tv_show_list = TVShows.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(title__icontains=title_str)[:100]
+
+    for tv in tv_show_list:
+        tv.media_type = "tv"
+        all_list.append(tv)
+
+    return all_list
 
 # update movie by id
 @router.put("/id/{id}")
