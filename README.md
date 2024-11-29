@@ -11,6 +11,9 @@
 - `python ./manage.py makemigrations`
 - `python ./manage.py migrate` * (if any migrations)
 
+<b>Run server locally:</b>
+- `python ./manage.py runserver <port>` <b>(do not use in production!)</b>
+
 # Start/stop server
 - <b> Start: </b> `sudo systemctl start gunicorn_tmdb.socket`
 - <b> Stop: </b> `sudo systemctl stop gunicorn_tmdb.socket`
