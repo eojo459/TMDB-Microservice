@@ -23,7 +23,7 @@ class TVShows(models.Model):
     director = models.ManyToManyField(Peoples, related_name='tv_director', null=True, blank=True) # FK to actors
     genres = models.ManyToManyField(Genres, null=True, blank=True) # FK to actors
     reviews = models.ManyToManyField(Reviews, blank=True) # FK to reviews
-    seasons = models.IntegerField(default=0)
+    seasons = models.IntegerField(default=1)
     episodes = models.IntegerField(default=0)
     enabled = models.BooleanField(default=True)
     archived = models.BooleanField(default=False)

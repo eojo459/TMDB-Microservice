@@ -93,16 +93,16 @@ class TVShowOut(Schema):
 
 class Season(Schema):
     tmdb_id: int
-    air_date: date | None = None
+    release_date: date | None = None
     episode_number: int
     name: str
-    overview: str
+    description: str
     runtime: int | None = None
     season_number: int
-    show_id: int
+    tv_show_tmdb_id: int
     still_path: str | None = None
-    vote_average: float | None = None
-    vote_count: int | None = None
+    rating: float | None = None
+    #vote_count: int | None = None
 
 
 
@@ -131,8 +131,10 @@ def tvshows_data_loading(request):
 @router.get("/seeding/data/{tmdb_id}")
 def tvshows_data_loading_single(request, tmdb_id: int):
     # TODO load data from other sources too
-    load_single_tv_show_data_TMDB(tmdb_id)
-    return {"success": True}
+    if load_single_tv_show_data_TMDB(tmdb_id):
+        return {"success": True}
+    else:
+        return {"success": False}
 
 # create new tv show
 @router.post("/", auth=None)
@@ -146,15 +148,32 @@ def get_tv_show_by_id(request, id: str):
     tv_show = get_object_or_404(TVShows, id=id)
     tv_show.recommendations = get_tv_recommendations_logic_TMDB(id)
     episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+    if episodes.count() <= 0:
+        # get episodes
+        episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
     tv_show.episodes = episodes
     return tv_show
 
 # get tv show by tmdb_id
 @router.get("/tmdb_id/{tmdb_id}", response=TVShowOut)
 def get_tv_by_tmdb_id(request, tmdb_id: int):
-    tv_show = get_object_or_404(TVShows, tmdb_id=tmdb_id)
+    tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+    if tv_show is None:
+        # create new tv show
+        if load_single_tv_show_data_TMDB(tmdb_id):
+            tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+    # update tv show if seasons == 0
+    if tv_show.seasons == 0:
+        load_single_tv_show_data_TMDB(tmdb_id, True)
+            
     tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
-    episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+    episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
+    if episodes.count() <= 0:
+        # get episodes
+        episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
     tv_show.episodes = episodes
     return tv_show
     
@@ -657,17 +676,17 @@ def load_tv_data_TMDB():
     return True
 
 # get the details for a tv show from TMDB
-def load_single_tv_show_data_TMDB(tmdb_id):
+def load_single_tv_show_data_TMDB(tmdb_id, update=False):
+    # check if tv show already exists
+    existing_tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+    if existing_tv_show is not None and update == False:
+        return False
+    
     # set headers
     headers = {
         "accept": "application/json",
         "Authorization": config('TMDB_API_TOKEN'),
     }
-    
-    # get all tv shows
-    tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
-    if tv_show is None:
-        return False
 
     actor_list = []
     director_list = []
@@ -675,26 +694,45 @@ def load_single_tv_show_data_TMDB(tmdb_id):
     trailer_list = []
 
     # url to get the details about a movie
-    url = f"https://api.themoviedb.org/3/tv/{tv_show.tmdb_id}?language=en-US&append_to_response=videos,images,credits"
+    url = f"https://api.themoviedb.org/3/tv/{tmdb_id}?language=en-US&append_to_response=videos,images,credits"
     response = requests.get(url, headers=headers)
     response_json = response.json()
 
-    # update imdb_id
-    if tv_show.imdb_id is not None and tv_show.imdb_id != '':
-        if tv_show.imdb_id == int(tv_show.imdb_id[2:]):
-            tv_show.imdb_id = response_json['imdb_id']
+    if existing_tv_show is not None and update == True:
+        # update tv show
+        existing_tv_show.title = response_json['name']
+        existing_tv_show.tmdb_id = response_json['id']
+        existing_tv_show.description = response_json['overview'][:252] + "..." if len(response_json['overview']) > 255 else response_json['overview'][:255]
+        existing_tv_show.poster_url = response_json['poster_path']
+        existing_tv_show.backdrop_url = response_json['backdrop_path']
+        existing_tv_show.seasons = response_json['number_of_seasons']
+        existing_tv_show.episodes = response_json['number_of_episodes']
+        existing_tv_show.rating = response_json['vote_average']
+        existing_tv_show.release_date = response_json['first_air_date']
+        existing_tv_show.languages = response_json['original_language']
+        existing_tv_show.save()
+        return True
 
-    # update status
-    if "status" in response_json:
-        tv_show.status = response_json['status']
-
-    # update seasons
-    if "number_of_seasons" in response_json and tv_show.seasons <= 0:
-        tv_show.seasons = response_json['number_of_seasons']  
-
-    # update backdrop
-    if "backdrop_path" in response_json and tv_show.backdrop_url is None:
-        tv_show.backdrop_url = response_json['backdrop_path']
+    # create new tv show
+    new_tv_show = {
+        'tmdb_id': response_json['id'],
+        'imdb_id': "zz" + str(response_json['id']),
+        'title': response_json['name'],
+        #'original_title': response_json['original_name'],
+        'description': response_json['overview'][:252] + "..." if len(response_json['overview']) > 255 else response_json['overview'][:255],
+        'poster_url': response_json['poster_path'],
+        'backdrop_url': response_json['backdrop_path'],
+        'seasons': response_json['number_of_seasons'],
+        'episodes': response_json['number_of_episodes'],
+        'rating': response_json['vote_average'],
+        #'vote_count': response_json['vote_count'],
+        'release_date': response_json['first_air_date'],
+        'languages': response_json['original_language'],
+        'imdb_link': '',
+    }                        
+                        
+    # create the new tv show
+    tv_show = TVShows.objects.create(**new_tv_show)
 
     # people credits
     #credits = []
@@ -850,7 +888,7 @@ def fetch_episodes_for_season_TMDB(tmdb_id, season_number):
                 'release_date': episode['air_date'],
                 'episode_number': episode['episode_number'],
                 'name': episode['name'][:255],
-                'description': episode['overview'][:255],
+                'description': episode['overview'][:252] + "..." if len(episode['overview']) > 255 else episode['overview'][:255],
                 'runtime': episode['runtime'],
                 'season_number': episode['season_number'],
                 'still_path': episode['still_path'],
@@ -946,7 +984,12 @@ def fetch_tv_shows_new_releases_TMDB():
 
                     # get episodes
                     episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show_exists.tmdb_id, season_number=1)
-                    tv_show_exists.episodes = episodes
+                    if episodes.count() <= 0:
+                        # get episodes
+                        season_episodes = get_tv_season_episodes_TMDB(tv_show_info['tmdb_id'], 1)
+                        tv_show_exists.episodes = season_episodes
+                    else:
+                        tv_show_exists.episodes = episodes
 
                     tv_show_list.append(tv_show_exists)
                 elif tv_show_exists is None:
@@ -974,7 +1017,13 @@ def fetch_tv_shows_new_releases_TMDB():
                     if tv_show_full is not None:
                         # get episodes
                         episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
-                        tv_show_full.episodes = episodes
+                        if episodes.count() <= 0:
+                            # get episodes
+                            season_episodes = get_tv_season_episodes_TMDB(tv_show_info['tmdb_id'], 1)
+                            tv_show_full.episodes = season_episodes
+                        else:
+                            tv_show_full.episodes = episodes
+
                         tv_show_list.append(tv_show_full)
                 else:
                     continue # skip
@@ -1190,6 +1239,9 @@ def fetch_tv_shows_trending_daily_TMDB():
 def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None):
     episode_list = []
 
+    if season_number <= 0 or season_number is None:
+        season_number = 1
+
     if episode_number is not None:
         url = f"https://api.themoviedb.org/3/tv/{series_id}/season/{season_number}/episode/{episode_number}"
     else:
@@ -1206,39 +1258,83 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None)
 
     response = requests.get(url, headers=headers)
     response_json = response.json()
+    default_runtime = None
 
     if episode_number is not None:
+        if default_runtime == None and response_json['runtime'] is not None and response_json['runtime'] > 0:
+            default_runtime = response_json['runtime']
+
         episode_info = {
             'tmdb_id': response_json['id'],
             'episode_number': response_json['episode_number'],
             'name': response_json['name'][:255],
-            'overview': response_json['overview'][:255],
-            'runtime': response_json['runtime'],
+            'description': response_json['overview'][:252] + "...",
+            'runtime': response_json['runtime'] if response_json['runtime'] is not None and response_json['runtime'] > 0 else default_runtime,
             'season_number': response_json['season_number'],
-            'show_id': series_id,
+            'tv_show_tmdb_id': series_id,
             'still_path': response_json['still_path'],
-            'vote_average': response_json['vote_average'],
-            'vote_count': response_json['vote_count'],
+            'rating': response_json['vote_average'],
+            #'vote_count': response_json['vote_count'],
+            #'description': response_json.get('overview', ''),  
+            'episode_type': response_json.get('episode_type', ''),
+            'enabled': True,
         }
         episode_list.append(episode_info)
     else:
         # for each episode
+        if 'episodes' not in response_json:
+            return # should not happen
+
         for episode in response_json['episodes']:
+            if default_runtime == None and episode['runtime'] is not None and episode['runtime'] > 0:
+                default_runtime = episode['runtime']
+
             episode_info = {
                 'tmdb_id': episode['id'],
                 'episode_number': episode['episode_number'],
                 'name': episode['name'][:255],
-                'overview': episode['overview'][:255],
-                'runtime': episode['runtime'],
+                'description': episode['overview'][:252] + "...",
+                'runtime': episode['runtime'] if episode['runtime'] is not None and episode['runtime'] > 0 else default_runtime,
                 'season_number': episode['season_number'],
-                'show_id': episode['show_id'],
+                'tv_show_tmdb_id': episode['show_id'],
                 'still_path': episode['still_path'],
-                'vote_average': episode['vote_average'],
-                'vote_count': episode['vote_count'],
+                'rating': episode['vote_average'],
+                #'vote_count': episode['vote_count'],
+                #'description': episode.get('overview', '')[:255],  
+                'episode_type': episode.get('episode_type', ''),
+                'enabled': True,
             }
             episode_list.append(episode_info)
 
     print("===== End of seasons =====")
+
+    # create new episodes if they dont exist
+    for episode in episode_list:
+        episode_exists = Episodes.objects.filter(tmdb_id=episode['tmdb_id']).first()
+        if episode_exists is None:
+            # find the tv show
+            tv_show = TVShows.objects.filter(tmdb_id=episode['tv_show_tmdb_id']).first()
+            if tv_show is not None:
+                episode['tv_show_id'] = tv_show
+            elif load_single_tv_show_data_TMDB(episode['tv_show_tmdb_id']):
+                # create tv show if it does not exist
+                tv_show = TVShows.objects.filter(tmdb_id=episode['tv_show_tmdb_id']).first()
+                episode['tv_show_id'] = tv_show
+
+            # create new episode
+            new_episode = Episodes.objects.create(**episode)
+        elif episode_exists and calculate_day_difference(episode_exists.last_updated.strftime('%Y-%m-%d'), 7):
+            # update episode entry
+            episode_exists.still_path = episode['still_path']
+            episode_exists.name = episode['name']
+            #episode_exists.vote_count = episode['vote_count']
+            episode_exists.rating = episode['rating']
+            episode_exists.description = episode['description']
+            episode_exists.runtime = episode['runtime']
+            episode_exists.save()
+
+    # sort episodes from episode 1 down (ascending order)
+    episode_list = sorted(episode_list, key=lambda x: x['episode_number'])
     
     return episode_list
 
