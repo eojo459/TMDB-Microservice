@@ -31,7 +31,7 @@ class TVShow(Schema):
     description: str
     origin_location: str | None = None
     languages: str
-    imdb_link: str
+    imdb_link: str | None = None
     youtube_trailer: List[Trailer]
     actors_cast: List[People]
     director: List[People]
@@ -79,7 +79,7 @@ class TVShowOut(Schema):
     description: str
     origin_location: str | None = None
     languages: str
-    imdb_link: str
+    imdb_link: str | None = None
     youtube_trailer: List[Trailer]
     actors_cast: List[People]
     director: List[People]
@@ -165,8 +165,9 @@ def get_tv_by_tmdb_id(request, tmdb_id: int):
             tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
 
     # update tv show if seasons == 0
-    if tv_show.seasons == 0:
+    if tv_show.seasons == 0 or tv_show.episodes == 0:
         load_single_tv_show_data_TMDB(tmdb_id, True)
+        tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
             
     tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
     episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
@@ -710,6 +711,7 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False):
         existing_tv_show.rating = response_json['vote_average']
         existing_tv_show.release_date = response_json['first_air_date']
         existing_tv_show.languages = response_json['original_language']
+        existing_tv_show.imdb_link = ''
         existing_tv_show.save()
         return True
 
