@@ -30,7 +30,7 @@ class Movie(Schema):
     backdrop_url: str | None = None
     title: str
     rating: float | None = None
-    release_date: date
+    release_date: date | str | None = None
     description: str
     origin_location: str
     languages: str
@@ -50,11 +50,11 @@ class MovieOut(Schema):
     poster_url: str
     title: str
     rating: float
-    release_date: date
+    release_date: date | str | None = None
     description: str
     origin_location: str
     languages: str
-    imdb_link: str
+    imdb_link: str | None = None
     run_time: int 
     enabled: bool
     #expires: datetime
@@ -66,7 +66,7 @@ class MovieRecommendations(Schema):
     backdrop_url: str | None = None
     title: str
     rating: float
-    release_date: date
+    release_date: date | str | None = None
     description: str
     genres: List[Genre] | None = None
     languages: str
@@ -81,7 +81,7 @@ class MovieOutFull(Schema):
     backdrop_url: str | None = None
     title: str | None = None
     rating: float | None = None
-    release_date: date | None = None
+    release_date: date | str | None = None
     description: str | None = None
     origin_location: str | None = None
     languages: str | None = None
@@ -175,8 +175,20 @@ def get_movie_by_id(request, id: str):
 # get movie by tmdb_id
 @router.get("/tmdb_id/{tmdb_id}", response=MovieOutFull)
 def get_movie_by_tmdb_id(request, tmdb_id: int):
-    movie = get_object_or_404(Movies, tmdb_id=tmdb_id)
+    movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+    if movie is None:
+        # create new movie
+        if load_single_movie_data_TMDB(tmdb_id):
+            movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+    
+    # update movie if runtime == 0
+    if movie.run_time <= 0:
+        load_single_movie_data_TMDB(tmdb_id, True)
+        movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+    
+    # get recommendations for movie
     movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
+
     return movie
 
 # get movie by imdb_id
@@ -555,7 +567,7 @@ def get_movie_recommendations_logic_TMDB(movie_id):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print(f"===== Getting movie recommendations for {movie_id} =====")
@@ -565,7 +577,7 @@ def get_movie_recommendations_logic_TMDB(movie_id):
     response = requests.get(url, headers=headers)
     response_json = response.json()
 
-    if response_json['total_pages'] > 1:
+    if response_json['total_pages'] >= 1:
         # get all the pages we can get
         while page <= max_pages:
             #print("===== Page " + str(page) + " =====")
@@ -614,7 +626,7 @@ def fetch_movies_TMDB(skip_round_1=False, skip_round_2=True):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     # round 1
@@ -757,7 +769,7 @@ def fetch_movies_new_releases_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     # get based on newly released, popular sort by descending (highest popularity to least popularity) 
@@ -810,10 +822,10 @@ def fetch_movies_new_releases_TMDB():
                         movie_exists.poster_url = result['poster_path']
                         movie_exists.title = result['title']
                         movie_exists.rating = result['vote_average']
-                        movie_exists.release_date = result['release_date']
+                        movie_exists.release_date = '9999-01-01' if result['release_date'] == '' else result['release_date'],
                         movie_exists.description = result['overview'][:255]
                         #movie_exists.run_time = result['runtime']
-                        movie_exists.last_updated = datetime.now().date()
+                        movie_exists.last_updated = str(datetime.now().date())
                         movie_exists.save()
 
                     movie_list.append(movie_exists)
@@ -864,7 +876,7 @@ def fetch_movies_trending_weekly_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print("===== Fetching trending weekly movies =====")
@@ -887,7 +899,7 @@ def fetch_movies_trending_weekly_TMDB():
                     'backdrop_url': result['backdrop_path'],
                     'title': result['title'][:255],
                     'rating': result['vote_average'],
-                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'release_date': '0001-01-01' if result['release_date'] == '' else result['release_date'],
                     'description': result['overview'][:255],
                     'origin_location': '',
                     'languages': result['original_language'],
@@ -910,9 +922,10 @@ def fetch_movies_trending_weekly_TMDB():
                         movie_exists.poster_url = result['poster_path']
                         movie_exists.title = result['title']
                         movie_exists.rating = result['vote_average']
-                        movie_exists.release_date = result['release_date']
+                        movie_exists.release_date = '0001-01-01' if result['release_date'] == '' else result['release_date'],
+                        movie_exists.release_date = movie_exists.release_date[0]
                         movie_exists.description = result['overview'][:255]
-                        movie_exists.last_updated = datetime.now().date()
+                        movie_exists.last_updated = str(datetime.now().date())
                         movie_exists.save()
 
                     movies_list.append(movie_exists)
@@ -959,7 +972,7 @@ def fetch_movies_trending_daily_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print("===== Fetching trending daily movies =====")
@@ -982,7 +995,7 @@ def fetch_movies_trending_daily_TMDB():
                     'backdrop_url': result['backdrop_path'],
                     'title': result['title'][:255],
                     'rating': result['vote_average'],
-                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                    'release_date': '0001-01-01' if result['release_date'] == '' else result['release_date'],
                     'description': result['overview'][:255],
                     'origin_location': '',
                     'languages': result['original_language'],
@@ -1006,7 +1019,8 @@ def fetch_movies_trending_daily_TMDB():
                         movie_exists.poster_url = result['poster_path']
                         movie_exists.title = result['title']
                         movie_exists.rating = result['vote_average']
-                        movie_exists.release_date = result['release_date']
+                        movie_exists.release_date = '0001-01-01' if result['release_date'] == '' else result['release_date'],
+                        movie_exists.release_date = movie_exists.release_date[0]
                         movie_exists.description = result['overview'][:255]
                         movie_exists.last_updated = datetime.now().date()
                         movie_exists.save()
@@ -1062,7 +1076,7 @@ def fetch_movie_by_TMDB_id(movie_id):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print(f"===== fetching data for {movie_id} =====")
@@ -1136,7 +1150,7 @@ def load_movie_data_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
     
     # get all movies
@@ -1337,7 +1351,7 @@ def load_single_movie_data_TMDB(tmdb_id):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
     
     # get all movies

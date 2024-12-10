@@ -146,7 +146,7 @@ def create_tv_show(request, payload: TVShow):
 @router.get("/id/{id}", response=TVShowOut)
 def get_tv_show_by_id(request, id: str):
     tv_show = get_object_or_404(TVShows, id=id)
-    tv_show.recommendations = get_tv_recommendations_logic_TMDB(id)
+    #tv_show.recommendations = get_tv_recommendations_logic_TMDB(id)
     episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
     if episodes.count() <= 0:
         # get episodes
@@ -167,15 +167,27 @@ def get_tv_by_tmdb_id(request, tmdb_id: int):
     # update tv show if seasons == 0
     if tv_show.seasons == 0 or tv_show.episodes == 0:
         load_single_tv_show_data_TMDB(tmdb_id, True)
-        tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
-            
-    tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
-    episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
-    if episodes.count() <= 0:
-        # get episodes
-        episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
 
-    tv_show.episodes = episodes
+    # TEMP 
+    skip_episodes = False
+    if skip_episodes == False:
+        episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
+        if episodes.count() <= 0:
+            # update tv show
+            load_single_tv_show_data_TMDB(tmdb_id, True)
+
+            # get updated tv show
+            tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+    else:
+        tv_show.episodes = []
+
+    tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
+    
     return tv_show
     
 
@@ -313,7 +325,7 @@ def get_trending_tv_shows_weekly_TMDB(request):
 
 # delete all tv show episodes
 @router.delete("/delete/episodes/all/")
-def delete_tv_show_by_imdb_id(request):
+def delete_tv_show_episodes_by_imdb_id(request):
     all_tv_shows = Episodes.objects.all()
 
     for tv_show in all_tv_shows:
@@ -345,7 +357,7 @@ def fetch_new_tvshows_TMDB(skip_round_1=False, skip_round_2=True):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     # 1st round get based on most popular sort by descending (highest popularity to least popularity) 
@@ -470,7 +482,7 @@ def get_tv_recommendations_logic_TMDB(series_id):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print(f"===== Getting recommendations for {series_id} =====")
@@ -521,7 +533,7 @@ def load_tv_data_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
     
     # get all tv shows
@@ -677,7 +689,7 @@ def load_tv_data_TMDB():
     return True
 
 # get the details for a tv show from TMDB
-def load_single_tv_show_data_TMDB(tmdb_id, update=False):
+def load_single_tv_show_data_TMDB(tmdb_id, update=False, load_seasons=False):
     # check if tv show already exists
     existing_tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
     if existing_tv_show is not None and update == False:
@@ -686,7 +698,7 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     actor_list = []
@@ -840,11 +852,12 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False):
             trailer_obj = Trailers.objects.create(**new_trailer)
             trailer_list.append(trailer_obj)
 
-    # foreach season get the episodes
-    season_count = 1
-    while season_count <= tv_show.seasons:
-        fetch_episodes_for_season_TMDB(tmdb_id, season_count)
-        season_count += 1
+    if load_seasons:
+        # foreach season get the episodes
+        season_count = 1
+        while season_count <= tv_show.seasons:
+            fetch_episodes_for_season_TMDB(tmdb_id, season_count)
+            season_count += 1
 
     # update movie foreign keys/many to many relationships
     if len(actor_list) > 0:
@@ -871,7 +884,7 @@ def fetch_episodes_for_season_TMDB(tmdb_id, season_number):
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     response = requests.get(base_url, headers=headers)
@@ -935,7 +948,7 @@ def fetch_tv_shows_new_releases_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     # get based on newly released, popular sort by descending (highest popularity to least popularity) 
@@ -1050,7 +1063,7 @@ def fetch_tv_shows_trending_weekly_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print("===== Fetching trending weekly tv shows =====")
@@ -1148,7 +1161,7 @@ def fetch_tv_shows_trending_daily_TMDB():
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print("===== Fetching trending daily tv shows =====")
@@ -1238,8 +1251,20 @@ def fetch_tv_shows_trending_daily_TMDB():
 
 
 # get season episodes for the tv show
-def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None):
+def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None, update = False):
     episode_list = []
+
+    if update == False:
+        # get local episodes if they exist
+        episodes_exists = Episodes.objects.filter(tv_show_tmdb_id=series_id)
+        if len(episodes_exists) > 0:
+            for episode in episodes_exists:
+                episode_list.append(episode)
+
+            # sort episodes from episode 1 down (ascending order)
+            episode_list = sorted(episode_list, key=lambda x: x.episode_number)
+            
+            return episode_list
 
     if season_number <= 0 or season_number is None:
         season_number = 1
@@ -1253,7 +1278,7 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None)
     # set headers
     headers = {
         "accept": "application/json",
-        "Authorization": config('TMDB_API_TOKEN'),
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
     print(f"===== Getting season {season_number} for {series_id} =====")
@@ -1323,8 +1348,11 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None)
                 tv_show = TVShows.objects.filter(tmdb_id=episode['tv_show_tmdb_id']).first()
                 episode['tv_show_id'] = tv_show
 
-            # create new episode
-            new_episode = Episodes.objects.create(**episode)
+            # check if episode exists
+            episode_exists = Episodes.objects.filter(tmdb_id=episode['tmdb_id'])
+            if episode_exists == False:
+                # create new episode
+                new_episode = Episodes.objects.create(**episode)
         elif episode_exists and calculate_day_difference(episode_exists.last_updated.strftime('%Y-%m-%d'), 7):
             # update episode entry
             episode_exists.still_path = episode['still_path']
