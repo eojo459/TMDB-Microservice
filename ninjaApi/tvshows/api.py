@@ -13,7 +13,7 @@ from people.models import Peoples
 from trailers.models import Trailers
 from people.api import People
 from trailers.api import Trailer
-from tvshows.models import Episodes, TVShows
+from tvshows.models import Episodes, TVShows, TVShowsNewReleases, TVShowsTrendingDaily, TVShowsTrendingWeekly
 from decouple import config
 
 router = Router()
@@ -313,15 +313,18 @@ def get_tv_recommendations(request, tmdb_id: str):
 
 @router.get("/newly-released/", response=List[TVShowOut])
 def get_newly_released_tv_shows_TMDB(request):
-    return fetch_tv_shows_new_releases_TMDB()
+    #return fetch_tv_shows_new_releases_TMDB()
+   return fetch_tv_shows_new_releases_cached()
 
 @router.get("/trending/daily/", response=List[TVShowOut])
 def get_trending_tv_shows_daily_TMDB(request):
-    return fetch_tv_shows_trending_daily_TMDB()
+    #return fetch_tv_shows_trending_daily_TMDB()
+    return fetch_tv_shows_trending_daily_cached()
 
 @router.get("/trending/weekly/", response=List[TVShowOut])
 def get_trending_tv_shows_weekly_TMDB(request):
-    return fetch_tv_shows_trending_weekly_TMDB()
+    #return fetch_tv_shows_trending_weekly_TMDB()
+    return fetch_tv_shows_trending_weekly_cached()
 
 # delete all tv show episodes
 @router.delete("/delete/episodes/all/")
@@ -1051,6 +1054,22 @@ def fetch_tv_shows_new_releases_TMDB():
 
         print("===== End of newly released tv shows =====")
 
+    # update new releases cache
+    tv_shows_new_releases = TVShowsNewReleases.objects.all()
+    for item in tv_shows_new_releases:
+        if item.tmdb_id not in [tv_show.tmdb_id for tv_show in tv_show_list]:
+            item.delete()
+
+    for index, tv_show in enumerate(tv_show_list[:50]):
+        if TVShowsNewReleases.objects.filter(tmdb_id=tv_show.tmdb_id).first() == None:
+            # create new release
+            data = {
+                'tmdb_id': tv_show.tmdb_id,
+                'imdb_id': tv_show.imdb_id,
+                'rank': index + 1
+            }
+            TVShowsNewReleases.objects.create(**data)
+
     return tv_show_list
 
 # fetch trending now tv shows from TMDB (weekly trending)
@@ -1149,6 +1168,22 @@ def fetch_tv_shows_trending_weekly_TMDB():
 
         print("===== End of trending weekly tv shows =====")
     
+    # update trending weekly cache
+    tv_shows_trending_weekly = TVShowsTrendingWeekly.objects.all()
+    for item in tv_shows_trending_weekly:
+        if item.tmdb_id not in [tv_show.tmdb_id for tv_show in tv_show_list]:
+            item.delete()
+
+    for index, tv_show in enumerate(tv_show_list[:50]):
+        if TVShowsTrendingWeekly.objects.filter(tmdb_id=tv_show.tmdb_id).first() == None:
+            # create new trending weekly
+            data = {
+                'tmdb_id': tv_show.tmdb_id,
+                'imdb_id': tv_show.imdb_id,
+                'rank': index + 1
+            }
+            TVShowsTrendingWeekly.objects.create(**data)
+
     return tv_show_list
 
 # fetch top picks today tv shows from TMDB (today's trending)
@@ -1247,6 +1282,22 @@ def fetch_tv_shows_trending_daily_TMDB():
 
         print("===== End of trending daily tv shows =====")
 
+    # update trending daily cache
+    tv_shows_trending_daily = TVShowsTrendingDaily.objects.all()
+    for item in tv_shows_trending_daily:
+        if item.tmdb_id not in [tv_show.tmdb_id for tv_show in tv_show_list]:
+            item.delete()
+
+    for index, tv_show in enumerate(tv_show_list[:50]):
+        if TVShowsTrendingDaily.objects.filter(tmdb_id=tv_show.tmdb_id).first() == None:
+            # create new trending daily
+            data = {
+                'tmdb_id': tv_show.tmdb_id,
+                'imdb_id': tv_show.imdb_id,
+                'rank': index + 1
+            }
+            TVShowsTrendingDaily.objects.create(**data)
+
     return tv_show_list
 
 
@@ -1281,7 +1332,7 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None,
         "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
     }
 
-    print(f"===== Getting season {season_number} for {series_id} =====")
+    #print(f"===== Getting season {season_number} for {series_id} =====")
 
     response = requests.get(url, headers=headers)
     response_json = response.json()
@@ -1333,7 +1384,7 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None,
             }
             episode_list.append(episode_info)
 
-    print("===== End of seasons =====")
+    #print("===== End of seasons =====")
 
     # create new episodes if they dont exist
     for episode in episode_list:
@@ -1368,6 +1419,82 @@ def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None,
     
     return episode_list
 
-
 # TODO: fetch popular tv shows from TMDB https://api.themoviedb.org/3/tv/popular
 # TODO: fetch top rated tv shows from TMDB https://api.themoviedb.org/3/tv/top_rated
+
+
+# get newly released tv shows from database cache
+def fetch_tv_shows_new_releases_cached():
+    new_releases_list = []
+
+    tv_shows_new_releases = TVShowsNewReleases.objects.all()[:50]
+
+    for item in tv_shows_new_releases:
+        # populate tv show info
+        #tv_show = TVShows.objects.filter(tmdb_id=item.tmdb_id).first()
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        new_releases_list.append(tv_show)
+
+    return new_releases_list
+
+# get tv shows trending daily from database cache
+def fetch_tv_shows_trending_daily_cached():
+    trending_daily_list = []
+
+    tv_shows_trending_daily = TVShowsTrendingDaily.objects.all()[:50]
+
+    for item in tv_shows_trending_daily:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        trending_daily_list.append(tv_show)
+
+    return trending_daily_list
+
+# get tv shows trending weekly from database cache
+def fetch_tv_shows_trending_weekly_cached():
+    trending_weekly_list = []
+
+    tv_shows_trending_weekly = TVShowsTrendingWeekly.objects.all()[:50]
+
+    for item in tv_shows_trending_weekly:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        trending_weekly_list.append(tv_show)
+
+    return trending_weekly_list

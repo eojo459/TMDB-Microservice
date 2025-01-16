@@ -29,3 +29,24 @@ class Movies(models.Model):
     expires = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
     status = models.CharField(max_length=50, null=True, blank=True)
+
+class MoviesNewReleases(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class MoviesTrendingDaily(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class MoviesTrendingWeekly(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)

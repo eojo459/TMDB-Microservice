@@ -7,6 +7,8 @@ from django_apscheduler.models import DjangoJobExecution
 import sys
 from datetime import date, datetime, time, timedelta
 from requests import Response
+from movies.api import fetch_movies_new_releases_TMDB, fetch_movies_trending_daily_TMDB, fetch_movies_trending_weekly_TMDB
+from tvshows.api import fetch_tv_shows_new_releases_TMDB, fetch_tv_shows_trending_daily_TMDB, fetch_tv_shows_trending_weekly_TMDB
 from user.models import User
 from django.db.models import Q, F
 from django_apscheduler import util
@@ -43,33 +45,109 @@ def check_expired_auth_accounts():
     # TODO: get the accounts where end date <= current date
     pass
 
+# get newly released tv shows from TMDB
+def update_newly_released_tv_shows():
+    print("Running scheduled task - update newly released tv shows")
+    fetch_tv_shows_new_releases_TMDB()
+    print("Ended scheduled task - update newly released tv shows")
+    return
+
+# get trending daily tv shows from TMDB
+def update_trending_daily_tv_shows():
+    print("Running scheduled task - update trending daily tv shows")
+    fetch_tv_shows_trending_daily_TMDB()
+    print("Ended scheduled task - update trending daily tv shows")
+    return
+
+# get trending weekly tv shows from TMDB
+def update_trending_weekly_tv_shows():
+    print("Running scheduled task - update trending weekly tv shows")
+    fetch_tv_shows_trending_weekly_TMDB()
+    print("Ended scheduled task - update trending weekly tv shows")
+    return
+
+# get newly released movies from TMDB
+def update_newly_released_movies():
+    print("Running scheduled task - update newly released movies")
+    fetch_movies_new_releases_TMDB()
+    print("Ended scheduled task - update newly released movies")
+    return
+
+# get trending daily movies from TMDB
+def update_trending_daily_movies():
+    print("Running scheduled task - update trending daily movies")
+    fetch_movies_trending_daily_TMDB()
+    print("Ended scheduled task - update trending daily movies")
+    return
+
+# get trending weekly movies from TMDB
+def update_trending_weekly_movies():
+    print("Running scheduled task - update trending weekly movies")
+    fetch_movies_trending_weekly_TMDB()
+    print("Ended scheduled task - update trending weekly movies")
+    return
+
 # start the scheduler
 def start_scheduler():
     scheduler = BackgroundScheduler()
     scheduler.add_jobstore(DjangoJobStore(), "default")
     
-    # check for expired subscriptions everyday
+    # update newly released tv shows
     scheduler.add_job(
-        check_expired_subscriptions, 
-        'cron', 
-        day_of_week='mon-sun',
-        hour='1',
-        # 'interval', 
-        # hours=24, 
-        id='check_expired_subscriptions', 
+        update_newly_released_tv_shows, 
+        'interval', 
+        hours=8,
+        id='update_newly_released_tv_shows', 
         max_instances=1,
         replace_existing=True,
     )
 
-    # check for expired auth accounts everyday
+    # update trending daily tv shows
     scheduler.add_job(
-        check_expired_auth_accounts, 
-        'cron', 
-        day_of_week='mon-sun',
-        hour='1', 
-        # 'interval',
-        # minutes=2,
-        id='check_expired_auth_accounts', 
+        update_trending_daily_tv_shows, 
+        'interval', 
+        hours=8, 
+        id='update_trending_daily_tv_shows', 
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update trending weekly tv shows
+    scheduler.add_job(
+        update_trending_weekly_tv_shows, 
+        'interval', 
+        hours=8, 
+        id='update_trending_weekly_tv_shows', 
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update newly released movies
+    scheduler.add_job(
+        update_newly_released_movies, 
+        'interval', 
+        hours=8, 
+        id='update_newly_released_movies', 
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update trending daily movies
+    scheduler.add_job(
+        update_trending_daily_movies, 
+        'interval', 
+        hours=8, 
+        id='update_trending_daily_movies', 
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update trending weekly movies
+    scheduler.add_job(
+        update_trending_weekly_movies, 
+        'interval', 
+        hours=8, 
+        id='update_trending_weekly_movies', 
         max_instances=1,
         replace_existing=True,
     )

@@ -6,7 +6,7 @@ from uuid import UUID
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router, Schema
-from movies.models import Movies
+from movies.models import Movies, MoviesNewReleases, MoviesTrendingDaily, MoviesTrendingWeekly
 from genres.api import Genre, GenreOut
 from backendApi.utils.helper import calculate_day_difference
 from genres.models import Genres
@@ -537,15 +537,18 @@ def get_movie_recommendations(request, tmdb_id: str):
 
 @router.get("/newly-released/", response=List[MovieOutFull])
 def get_newly_released_movies_TMDB(request):
-    return fetch_movies_new_releases_TMDB()
+    #return fetch_movies_new_releases_TMDB()
+    return fetch_movies_new_releases_cached()
 
 @router.get("/trending/daily/", response=List[MovieOutFull])
 def get_trending_movies_daily_TMDB(request):
-    return fetch_movies_trending_daily_TMDB()
+    #return fetch_movies_trending_daily_TMDB()
+    return fetch_movies_trending_daily_cached()
 
 @router.get("/trending/weekly/", response=List[MovieOutFull])
 def get_trending_movies_weekly_TMDB(request):
-    return fetch_movies_trending_weekly_TMDB()
+    #return fetch_movies_trending_weekly_TMDB()
+    return fetch_movies_trending_weekly_cached()
 
 @router.get("/details/{tmdb_id}", response=MovieOutFull)
 def get_movie_details_TMDB(request, tmdb_id: str):
@@ -823,9 +826,10 @@ def fetch_movies_new_releases_TMDB():
                         movie_exists.title = result['title']
                         movie_exists.rating = result['vote_average']
                         movie_exists.release_date = '9999-01-01' if result['release_date'] == '' else result['release_date'],
+                        movie_exists.release_date = movie_exists.release_date[0]
                         movie_exists.description = result['overview'][:255]
                         #movie_exists.run_time = result['runtime']
-                        movie_exists.last_updated = str(datetime.now().date())
+                        #movie_exists.last_updated = str(datetime.now().date())
                         movie_exists.save()
 
                     movie_list.append(movie_exists)
@@ -863,6 +867,22 @@ def fetch_movies_new_releases_TMDB():
             response_json = response.json()
 
         print("===== End of newly released movies =====")
+
+    # update new releases movies cache
+    movies_new_releases = MoviesNewReleases.objects.all()
+    for item in movies_new_releases:
+        if item.tmdb_id not in [movie.tmdb_id for movie in movie_list]:
+            item.delete()
+
+    for index, movie in enumerate(movie_list[:50]):
+        if MoviesNewReleases.objects.filter(tmdb_id=movie.tmdb_id).first() == None:
+            # create new release
+            data = {
+                'tmdb_id': movie.tmdb_id,
+                'imdb_id': movie.imdb_id,
+                'rank': index + 1
+            }
+            MoviesNewReleases.objects.create(**data)
 
     return movie_list
 
@@ -960,6 +980,22 @@ def fetch_movies_trending_weekly_TMDB():
 
         print("===== End of trending weekly movies =====")
     
+    # update trending weekly movies cache
+    movies_trending_weekly = MoviesTrendingWeekly.objects.all()
+    for item in movies_trending_weekly:
+        if item.tmdb_id not in [movie.tmdb_id for movie in movies_list]:
+            item.delete()
+
+    for index, movie in enumerate(movies_list[:50]):
+        if MoviesTrendingWeekly.objects.filter(tmdb_id=movie.tmdb_id).first() == None:
+            # create trending weekly movie
+            data = {
+                'tmdb_id': movie.tmdb_id,
+                'imdb_id': movie.imdb_id,
+                'rank': index + 1
+            }
+            MoviesTrendingWeekly.objects.create(**data)
+
     return movies_list
 
 # fetch top picks today movies from TMDB (today's trending)
@@ -1056,6 +1092,22 @@ def fetch_movies_trending_daily_TMDB():
             response_json = response.json()
 
         print("===== End of trending daily movies =====")
+
+    # update trending daily movies cache
+    movies_trending_daily = MoviesTrendingDaily.objects.all()
+    for item in movies_trending_daily:
+        if item.tmdb_id not in [movie.tmdb_id for movie in movies_list]:
+            item.delete()
+
+    for index, movie in enumerate(movies_list[:50]):
+        if MoviesTrendingDaily.objects.filter(tmdb_id=movie.tmdb_id).first() == None:
+            # create trending daily movie
+            data = {
+                'tmdb_id': movie.tmdb_id,
+                'imdb_id': movie.imdb_id,
+                'rank': index + 1
+            }
+            MoviesTrendingDaily.objects.create(**data)
 
     return movies_list
 
@@ -1506,3 +1558,42 @@ def load_single_movie_data_TMDB(tmdb_id):
     movie.save()
 
     return True
+
+# get newly released movies from database cache
+def fetch_movies_new_releases_cached():
+    new_releases_list = []
+
+    movies_new_releases = MoviesNewReleases.objects.all()[:50]
+
+    for item in movies_new_releases:
+        # populate movie info
+        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        new_releases_list.append(movie)
+
+    return new_releases_list
+
+# get trending daily movies from database cache
+def fetch_movies_trending_daily_cached():
+    trending_daily_list = []
+
+    movies_trending_daily = MoviesTrendingDaily.objects.all()[:50]
+
+    for item in movies_trending_daily:
+        # populate movie info
+        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        trending_daily_list.append(movie)
+
+    return trending_daily_list
+
+# get trending weekly movies from database cache
+def fetch_movies_trending_weekly_cached():
+    trending_weekly_list = []
+
+    movies_trending_weekly = MoviesTrendingWeekly.objects.all()[:50]
+
+    for item in movies_trending_weekly:
+        # populate movie info
+        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        trending_weekly_list.append(movie)
+
+    return trending_weekly_list

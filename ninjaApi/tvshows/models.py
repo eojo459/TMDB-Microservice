@@ -48,3 +48,24 @@ class Episodes(models.Model):
     archived = models.BooleanField(default=False)
     expires = models.DateTimeField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsNewReleases(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsTrendingDaily(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsTrendingWeekly(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
