@@ -1567,7 +1567,13 @@ def fetch_movies_new_releases_cached():
 
     for item in movies_new_releases:
         # populate movie info
-        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
         new_releases_list.append(movie)
 
     return new_releases_list
@@ -1580,7 +1586,13 @@ def fetch_movies_trending_daily_cached():
 
     for item in movies_trending_daily:
         # populate movie info
-        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
         trending_daily_list.append(movie)
 
     return trending_daily_list
@@ -1593,7 +1605,13 @@ def fetch_movies_trending_weekly_cached():
 
     for item in movies_trending_weekly:
         # populate movie info
-        movie = Movies.objects.filter(tmdb_id=item.tmdb_id).first()
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
         trending_weekly_list.append(movie)
 
     return trending_weekly_list
