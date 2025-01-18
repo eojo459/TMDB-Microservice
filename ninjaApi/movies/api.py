@@ -198,6 +198,35 @@ def get_movie_by_imdb_id(request, imdb_id: str):
     movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
     return movie
 
+# get list of tv show by tmdb_id
+@router.post("/tmdb_ids/", response=List[MovieOutFull])
+def get_list_of_movies_by_tmdb_id(request, payload: List[object]):
+    if request.method != 'POST':
+        return 405, {"detail": "Method not allowed."}
+    
+    movies_list = []
+
+    for item in payload:
+        tmdb_id = item['tmdb_id']
+
+        movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+        if movie is None:
+            # create new tv show
+            if load_single_movie_data_TMDB(tmdb_id):
+                tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+        # update tv show if seasons == 0
+        if movie.run_time <= 0:
+            load_single_movie_data_TMDB(tmdb_id)
+            movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+
+
+        #tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
+        movie.type = "movie"
+        movies_list.append(movie)
+    
+    return movies_list
+
 # list all movies first
 @router.get("/", response=List[MovieOutFull])
 def list_all_movies(request):

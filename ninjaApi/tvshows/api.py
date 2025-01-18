@@ -90,6 +90,23 @@ class TVShowOut(Schema):
     enabled: bool
     media_type: str | None = None
     expires: datetime | None = None
+    type: str | None = None
+
+class MovieOut(Schema):
+    id: UUID
+    tmdb_id: int
+    imdb_id: str
+    poster_url: str
+    title: str
+    rating: float
+    release_date: date | str | None = None
+    description: str
+    origin_location: str
+    languages: str
+    imdb_link: str | None = None
+    run_time: int 
+    enabled: bool
+    #expires: datetime
 
 class Season(Schema):
     tmdb_id: int
@@ -104,7 +121,20 @@ class Season(Schema):
     rating: float | None = None
     #vote_count: int | None = None
 
+class WatchlistItem(Schema):
+    imdb_id: str
+    tmdb_id: str
+    type: str
+    updated_at: str
+    created_at: str
+    watchlist_id: str
 
+class Watchlist(Schema):
+    watchlist_id: str
+    items: List[object] | None
+
+
+    
 
 ################################
 # API CONTROLLER METHODS
@@ -189,6 +219,89 @@ def get_tv_by_tmdb_id(request, tmdb_id: int):
     tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
     
     return tv_show
+
+# get media (tv or movie) by tmdb_id
+@router.get("/media/tmdb_id/{tmdb_id}", response=TVShowOut | MovieOut)
+def get_media_by_tmdb_id(request, tmdb_id: int):
+    # try to get tv show first
+    tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+    if tv_show is None:
+        # try movie
+        movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
+        movie.type = "movie"
+        return movie
+
+    # update tv show if seasons == 0
+    if tv_show.seasons == 0 or tv_show.episodes == 0:
+        load_single_tv_show_data_TMDB(tmdb_id, True)
+
+    # TEMP 
+    skip_episodes = False
+    if skip_episodes == False:
+        episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
+        if episodes.count() <= 0:
+            # update tv show
+            load_single_tv_show_data_TMDB(tmdb_id, True)
+
+            # get updated tv show
+            tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+    else:
+        tv_show.episodes = []
+
+    tv_show.type = "tv"
+    #tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
+    
+    return tv_show
+
+# get list of tv show by tmdb_id
+@router.post("/tmdb_ids/", response=List[TVShowOut])
+def get_list_of_tv_by_tmdb_id(request, payload: List[object]):
+    if request.method != 'POST':
+        return 405, {"detail": "Method not allowed."}
+    
+    tv_show_list = []
+
+    for item in payload:
+        tmdb_id = item['tmdb_id']
+
+        tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+        if tv_show is None:
+            # create new tv show
+            if load_single_tv_show_data_TMDB(tmdb_id):
+                tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+        # update tv show if seasons == 0
+        if tv_show.seasons == 0 or tv_show.episodes == 0:
+            load_single_tv_show_data_TMDB(tmdb_id, True)
+
+        # TEMP 
+        skip_episodes = True
+        if skip_episodes == False:
+            episodes = Episodes.objects.filter(tv_show_id=tv_show.id, season_number=1)
+            if episodes.count() <= 0:
+                # update tv show
+                load_single_tv_show_data_TMDB(tmdb_id, True)
+
+                # get updated tv show
+                tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+
+                # get episodes
+                episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+            tv_show.episodes = episodes
+        else:
+            tv_show.episodes = []
+
+        #tv_show.recommendations = get_tv_recommendations_logic_TMDB(tmdb_id)
+        tv_show.type = "tv"
+        tv_show_list.append(tv_show)
+    
+    return tv_show_list
     
 
 # get tv show by imdb_id
@@ -217,6 +330,7 @@ def list_all_tv_shows(request):
         tv_show.episodes = episodes
 
     return tv_show_list
+    
 
 # list all tv show that contain a str in their title
 @router.get("/title/{title_str}", response=List[TVShowOut])
@@ -1305,17 +1419,17 @@ def fetch_tv_shows_trending_daily_TMDB():
 def get_tv_season_episodes_TMDB(series_id, season_number, episode_number = None, update = False):
     episode_list = []
 
-    if update == False:
-        # get local episodes if they exist
-        episodes_exists = Episodes.objects.filter(tv_show_tmdb_id=series_id)
-        if len(episodes_exists) > 0:
-            for episode in episodes_exists:
-                episode_list.append(episode)
+    # if update == False:
+    #     # get local episodes if they exist
+    #     episodes_exists = Episodes.objects.filter(tv_show_tmdb_id=series_id)
+    #     if len(episodes_exists) > 0:
+    #         for episode in episodes_exists:
+    #             episode_list.append(episode)
 
-            # sort episodes from episode 1 down (ascending order)
-            episode_list = sorted(episode_list, key=lambda x: x.episode_number)
+    #         # sort episodes from episode 1 down (ascending order)
+    #         episode_list = sorted(episode_list, key=lambda x: x.episode_number)
             
-            return episode_list
+    #         return episode_list
 
     if season_number <= 0 or season_number is None:
         season_number = 1
@@ -1445,6 +1559,7 @@ def fetch_tv_shows_new_releases_cached():
             episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
 
         tv_show.episodes = episodes
+        tv_show.type = "tv"
         new_releases_list.append(tv_show)
 
     return new_releases_list
@@ -1470,6 +1585,7 @@ def fetch_tv_shows_trending_daily_cached():
             episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
 
         tv_show.episodes = episodes
+        tv_show.type = "tv"
         trending_daily_list.append(tv_show)
 
     return trending_daily_list
@@ -1495,6 +1611,7 @@ def fetch_tv_shows_trending_weekly_cached():
             episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
 
         tv_show.episodes = episodes
+        tv_show.type = "tv"
         trending_weekly_list.append(tv_show)
 
     return trending_weekly_list
