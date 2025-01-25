@@ -1,6 +1,8 @@
 from datetime import date, datetime, timedelta
+import json
 from typing import List
 from uuid import UUID
+from django.forms import model_to_dict
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router, Schema
@@ -13,7 +15,7 @@ from people.models import Peoples
 from trailers.models import Trailers
 from people.api import People
 from trailers.api import Trailer
-from tvshows.models import Episodes, TVShows, TVShowsNewReleases, TVShowsTrendingDaily, TVShowsTrendingWeekly
+from tvshows.models import Episodes, TVShows, TVShowsNewReleases, TVShowsTrendingAmazonPrime, TVShowsTrendingDaily, TVShowsTrendingDisneyPlus, TVShowsTrendingNetflix, TVShowsTrendingWeekly
 from decouple import config
 
 router = Router()
@@ -69,7 +71,7 @@ class TVShowEpisode(Schema):
     expires: datetime | None = None
 
 class TVShowOut(Schema):
-    id: UUID
+    id: UUID | None = None
     tmdb_id: int
     imdb_id: str
     poster_url: str | None = None
@@ -133,7 +135,10 @@ class Watchlist(Schema):
     watchlist_id: str
     items: List[object] | None
 
-
+class TrendingServicesTV(Schema):
+    netflix_tv_shows: List[TVShowOut] | None = None
+    amazon_prime_tv_shows: List[TVShowOut] | None = None
+    disney_plus_tv_shows: List[TVShowOut] | None = None
     
 
 ################################
@@ -459,6 +464,23 @@ def get_tv_shows_season_episode_TMDB(request, tmdb_id: int, season_number: int, 
 @router.get("/tmdb_id/{tmdb_id}/season/{season_number}", response=List[Season])
 def get_tv_shows_season_TMDB(request, tmdb_id: int, season_number: int):
     return get_tv_season_episodes_TMDB(tmdb_id, season_number)
+
+@router.get("/trending/streaming/", response=TrendingServicesTV)
+def get_trending_tv_shows_streaming_services(request):
+    #return fetch_tv_shows_trending_services()
+    return fetch_tv_shows_trending_services_cached()
+
+@router.get("/trending/netflix/", response=List[TVShowOut])
+def get_trending_tv_shows_netflix(request):
+    return fetch_tv_shows_trending_netflix_cached()
+
+@router.get("/trending/disney_plus/", response=List[TVShowOut])
+def get_trending_tv_shows_disney_plus(request):
+    return fetch_tv_shows_trending_disney_plus_cached()
+
+@router.get("/trending/amazon_prime/", response=List[TVShowOut])
+def get_trending_tv_shows_amazon_prime(request):
+    return fetch_tv_shows_trending_amazon_prime_cached()
 
 #################################
 # HELPERS
@@ -1615,3 +1637,263 @@ def fetch_tv_shows_trending_weekly_cached():
         trending_weekly_list.append(tv_show)
 
     return trending_weekly_list
+
+# get tv shows trending netflix from database cache
+def fetch_tv_shows_trending_netflix_cached():
+    trending_netflix_list = []
+
+    tv_shows_trending_netflix = TVShowsTrendingNetflix.objects.all()[:50]
+
+    for item in tv_shows_trending_netflix:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_netflix_list.append(tv_show)
+
+    return trending_netflix_list
+
+# get tv shows trending disney plus from database cache
+def fetch_tv_shows_trending_disney_plus_cached():
+    trending_disney_plus_list = []
+
+    tv_shows_trending_disney_plus = TVShowsTrendingDisneyPlus.objects.all()[:50]
+
+    for item in tv_shows_trending_disney_plus:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_disney_plus_list.append(tv_show)
+
+    return trending_disney_plus_list
+
+# get tv shows trending amazon prime video from database cache
+def fetch_tv_shows_trending_amazon_prime_cached():
+    trending_amazon_prime_list = []
+
+    tv_shows_trending_amazon_prime = TVShowsTrendingAmazonPrime.objects.all()[:50]
+
+    for item in tv_shows_trending_amazon_prime:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_amazon_prime_list.append(tv_show)
+
+    return trending_amazon_prime_list
+
+# get tv shows trending from all services trending from cache
+def fetch_tv_shows_trending_services_cached():
+    trending_netflix_list = []
+    trending_disney_plus_list = []
+    trending_amazon_prime_list = []
+
+    tv_shows_trending_netflix = TVShowsTrendingNetflix.objects.all()[:50]
+    tv_shows_trending_disney_plus = TVShowsTrendingDisneyPlus.objects.all()[:50]
+    tv_shows_trending_amazon_prime = TVShowsTrendingAmazonPrime.objects.all()[:50]
+
+    for item in tv_shows_trending_netflix:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_netflix_list.append(tv_show)
+
+    for item in tv_shows_trending_disney_plus:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_disney_plus_list.append(tv_show)
+
+    for item in tv_shows_trending_amazon_prime:
+        # populate tv show info
+        tv_show = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        episodes = Episodes.objects.filter(tv_show_tmdb_id=tv_show.tmdb_id, season_number=1)
+        if episodes.count() <= 0:
+            # get episodes
+            episodes = get_tv_season_episodes_TMDB(tv_show.tmdb_id, 1)
+
+        tv_show.episodes = episodes
+        tv_show.type = "tv"
+        trending_amazon_prime_list.append(tv_show)
+
+    data = {
+        'netflix_tv_shows': trending_netflix_list,
+        'disney_plus_tv_shows': trending_disney_plus_list,
+        'amazon_prime_tv_shows': trending_amazon_prime_list
+    }
+
+    return data
+
+# GET service specific trending shows
+# PROVIDER                 | ID
+#--------------------------#---------------
+# netflix                  | 8
+# netflix (ads)            | 1796
+# disney+                  | 337
+# amazon video             | 10
+# amazon prime video       | 9 and 119
+# amazon prime video (ads) | 2100
+def fetch_tv_shows_trending_services():
+    netflix_shows = []
+    disney_plus_shows = []
+    amazon_prime_shows = []
+
+    # get all trending shows from TMDB
+    all_trending_shows = fetch_tv_shows_trending_weekly_TMDB()
+
+    headers = {
+        "accept": "application/json",
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
+    }
+
+    # for each show, get the streaming service it is available on
+    for show in all_trending_shows:
+        url = "https://api.themoviedb.org/3/tv/{series_id}/watch/providers"
+        url = url.replace("{series_id}", str(show.tmdb_id))
+        response = requests.get(url, headers=headers)
+        response_json = response.json()
+
+        if 'US' in response_json['results'] and 'flatrate' in response_json['results']['US']:
+            providers = response_json['results']['US']['flatrate']
+        elif 'CA' in response_json['results'] and 'flatrate' in response_json['results']['CA']:
+            providers = response_json['results']['CA']['flatrate']
+        elif 'US' in response_json['results'] and 'buy' in response_json['results']['US']:
+            providers = response_json['results']['US']['buy']
+        elif 'CA' in response_json['results'] and 'buy' in response_json['results']['CA']:
+            providers = response_json['results']['CA']['buy']
+        else:
+            continue # skip
+
+        # determine the streaming provider of the show
+        for provider in providers:
+            if provider['provider_id'] == (8 or 1796):
+                # netflix
+                if show not in netflix_shows:
+                    netflix_shows.append(model_to_dict(show))
+            elif provider['provider_id'] == 337:
+                # disney+
+                if show not in disney_plus_shows:
+                    disney_plus_shows.append(model_to_dict(show))
+            elif provider['provider_id'] == (9 or 10 or 119 or 2100):
+                # amazon prime video
+                if show not in amazon_prime_shows:
+                    amazon_prime_shows.append(model_to_dict(show))
+
+    # cache to database
+    trending_netflix = TVShowsTrendingNetflix.objects.all()
+    trending_disney_plus = TVShowsTrendingDisneyPlus.objects.all()
+    trending_amazon_prime = TVShowsTrendingAmazonPrime.objects.all()
+
+    for item in trending_netflix:
+        if item.tmdb_id not in [tv_show['tmdb_id'] for tv_show in netflix_shows]:
+            item.delete()
+
+    for item in trending_disney_plus:
+        if item.tmdb_id not in [tv_show['tmdb_id'] for tv_show in disney_plus_shows]:
+            item.delete()
+
+    for item in trending_amazon_prime:
+        if item.tmdb_id not in [tv_show['tmdb_id'] for tv_show in amazon_prime_shows]:
+            item.delete()
+
+    for index, tv_show in enumerate(netflix_shows[:50]):
+        if TVShowsTrendingNetflix.objects.filter(tmdb_id=tv_show['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': tv_show['tmdb_id'],
+                'imdb_id': tv_show['imdb_id'],
+                'rank': index + 1
+            }
+            TVShowsTrendingNetflix.objects.create(**data)
+
+    for index, tv_show in enumerate(disney_plus_shows[:50]):
+        if TVShowsTrendingDisneyPlus.objects.filter(tmdb_id=tv_show['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': tv_show['tmdb_id'],
+                'imdb_id': tv_show['imdb_id'],
+                'rank': index + 1
+            }
+            TVShowsTrendingDisneyPlus.objects.create(**data)
+
+    for index, tv_show in enumerate(amazon_prime_shows[:50]):
+        if TVShowsTrendingAmazonPrime.objects.filter(tmdb_id=tv_show['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': tv_show['tmdb_id'],
+                'imdb_id': tv_show['imdb_id'],
+                'rank': index + 1
+            }
+            TVShowsTrendingAmazonPrime.objects.create(**data)
+
+    data = {
+        'netflix_tv_shows': netflix_shows,
+        'disney_plus_tv_shows': disney_plus_shows,
+        'amazon_prime_tv_shows': amazon_prime_shows
+    }
+
+    return data

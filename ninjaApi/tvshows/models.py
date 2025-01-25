@@ -69,3 +69,24 @@ class TVShowsTrendingWeekly(models.Model):
     imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
     rank = models.IntegerField(null=True, blank=True)
     last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsTrendingNetflix(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsTrendingDisneyPlus(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)
+
+class TVShowsTrendingAmazonPrime(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False, unique=True)
+    tmdb_id = models.IntegerField(unique=True)
+    imdb_id = models.CharField(max_length=30, unique=True, null=True, blank=True)
+    rank = models.IntegerField(null=True, blank=True)
+    last_updated = models.DateTimeField(auto_now=True, null=True, blank=True)

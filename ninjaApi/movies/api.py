@@ -6,7 +6,7 @@ from uuid import UUID
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Router, Schema
-from movies.models import Movies, MoviesNewReleases, MoviesTrendingDaily, MoviesTrendingWeekly
+from movies.models import Movies, MoviesNewReleases, MoviesTrendingAmazonPrime, MoviesTrendingDaily, MoviesTrendingDisneyPlus, MoviesTrendingNetflix, MoviesTrendingWeekly
 from genres.api import Genre, GenreOut
 from backendApi.utils.helper import calculate_day_difference
 from genres.models import Genres
@@ -95,6 +95,11 @@ class MovieOutFull(Schema):
     enabled: bool | None = None
     media_type: str | None = None
     #expires: datetime
+
+class TrendingServicesMovie(Schema):
+    netflix_movies: List[MovieOutFull] | None = None
+    amazon_prime_movies: List[MovieOutFull] | None = None
+    disney_plus_movies: List[MovieOutFull] | None = None
 
 ################################
 # API CONTROLLER METHODS
@@ -582,6 +587,23 @@ def get_trending_movies_weekly_TMDB(request):
 @router.get("/details/{tmdb_id}", response=MovieOutFull)
 def get_movie_details_TMDB(request, tmdb_id: str):
     return fetch_movie_by_TMDB_id(tmdb_id)
+
+@router.get("/trending/streaming/", response=TrendingServicesMovie)
+def get_trending_movies_streaming_services(request):
+    #return fetch_movies_trending_services()
+    return fetch_movies_trending_services_cached()
+
+@router.get("/trending/netflix/", response=List[MovieOutFull])
+def get_trending_movies_netflix(request):
+    return fetch_movies_trending_netflix_cached()
+
+@router.get("/trending/disney_plus/", response=List[MovieOutFull])
+def get_trending_movies_disney_plus(request):
+    return fetch_movies_trending_disney_plus_cached()
+
+@router.get("/trending/amazon_prime/", response=List[MovieOutFull])
+def get_trending_movies_amazon_prime(request):
+    return fetch_movies_trending_amazon_prime_cached()
 
 ###################################
 # HELPERS
@@ -1644,3 +1666,227 @@ def fetch_movies_trending_weekly_cached():
         trending_weekly_list.append(movie)
 
     return trending_weekly_list
+
+# get movies trending netflix from database cache
+def fetch_movies_trending_netflix_cached():
+    trending_netflix_list = []
+
+    movies_trending_netflix = MoviesTrendingNetflix.objects.all()[:50]
+
+    for item in movies_trending_netflix:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_netflix_list.append(movie)
+        
+    return trending_netflix_list
+
+# get movies trending disney plus from database cache
+def fetch_movies_trending_disney_plus_cached():
+    trending_disney_plus_list = []
+
+    movies_trending_disney_plus = MoviesTrendingDisneyPlus.objects.all()[:50]
+
+    for item in movies_trending_disney_plus:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_disney_plus_list.append(movie)
+
+    return trending_disney_plus_list
+
+# get movies trending amazon prime video from database cache
+def fetch_movies_trending_amazon_prime_cached():
+    trending_amazon_prime_list = []
+
+    movies_trending_amazon_prime = MoviesTrendingAmazonPrime.objects.all()[:50]
+
+    for item in movies_trending_amazon_prime:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_amazon_prime_list.append(movie)
+
+    return trending_amazon_prime_list
+
+# get movies trending from all services trending from cache
+def fetch_movies_trending_services_cached():
+    trending_netflix_list = []
+    trending_disney_plus_list = []
+    trending_amazon_prime_list = []
+
+    movies_trending_netflix = MoviesTrendingNetflix.objects.all()[:50]
+    movies_trending_disney_plus = MoviesTrendingDisneyPlus.objects.all()[:50]
+    movies_trending_amazon_prime = MoviesTrendingAmazonPrime.objects.all()[:50]
+
+    for item in movies_trending_netflix:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_netflix_list.append(movie)
+
+    for item in movies_trending_disney_plus:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_disney_plus_list.append(movie)
+
+    for item in movies_trending_amazon_prime:
+        # populate tv show info
+        movie = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=item.tmdb_id).first()
+        movie.type = "movie"
+        trending_amazon_prime_list.append(movie)
+
+    data = {
+        'netflix_movies': trending_netflix_list,
+        'disney_plus_movies': trending_disney_plus_list,
+        'amazon_prime_movies': trending_amazon_prime_list
+    }
+
+    return data
+
+# GET service specific trending shows
+# PROVIDER                 | ID
+#--------------------------#---------------
+# netflix                  | 8
+# netflix (ads)            | 1796
+# disney+                  | 337
+# amazon video             | 10
+# amazon prime video       | 9 and 119
+# amazon prime video (ads) | 2100
+def fetch_movies_trending_services():
+    netflix_movies = []
+    disney_plus_movies = []
+    amazon_prime_movies = []
+
+    # get all trending movies from TMDB
+    all_trending_movies = fetch_movies_trending_weekly_TMDB()
+
+    headers = {
+        "accept": "application/json",
+        "Authorization": "Bearer " + config('TMDB_API_TOKEN'),
+    }
+
+    # for each movie, get the streaming service it is available on
+    for movie in all_trending_movies:
+        url = "https://api.themoviedb.org/3/movie/{series_id}/watch/providers"
+        url = url.replace("{series_id}", str(movie.tmdb_id))
+        response = requests.get(url, headers=headers)
+        response_json = response.json()
+
+        if 'US' in response_json['results'] and 'flatrate' in response_json['results']['US']:
+            providers = response_json['results']['US']['flatrate']
+        elif 'CA' in response_json['results'] and 'flatrate' in response_json['results']['CA']:
+            providers = response_json['results']['CA']['flatrate']
+        elif 'US' in response_json['results'] and 'buy' in response_json['results']['US']:
+            providers = response_json['results']['US']['buy']
+        elif 'CA' in response_json['results'] and 'buy' in response_json['results']['CA']:
+            providers = response_json['results']['CA']['buy']
+        else:
+            continue # skip
+
+        # determine the streaming provider of the movie
+        for provider in providers:
+            if provider['provider_id'] == (8 or 1796):
+                # netflix
+                if movie not in netflix_movies:
+                    netflix_movies.append(model_to_dict(movie))
+            elif provider['provider_id'] == 337:
+                # disney+
+                if movie not in disney_plus_movies:
+                    disney_plus_movies.append(model_to_dict(movie))
+            elif provider['provider_id'] == (9 or 10 or 119 or 2100):
+                # amazon prime video
+                if movie not in amazon_prime_movies:
+                    amazon_prime_movies.append(model_to_dict(movie))
+
+    # cache to database
+    trending_netflix = MoviesTrendingNetflix.objects.all()
+    trending_disney_plus = MoviesTrendingDisneyPlus.objects.all()
+    trending_amazon_prime = MoviesTrendingAmazonPrime.objects.all()
+
+    for item in trending_netflix:
+        if item.tmdb_id not in [movie['tmdb_id'] for movie in netflix_movies]:
+            item.delete()
+
+    for item in trending_disney_plus:
+        if item.tmdb_id not in [movie['tmdb_id'] for movie in disney_plus_movies]:
+            item.delete()
+
+    for item in trending_amazon_prime:
+        if item.tmdb_id not in [movie['tmdb_id'] for movie in amazon_prime_movies]:
+            item.delete()
+
+    for index, movie in enumerate(netflix_movies[:50]):
+        if MoviesTrendingNetflix.objects.filter(tmdb_id=movie['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': movie['tmdb_id'],
+                'imdb_id': movie['imdb_id'],
+                'rank': index + 1
+            }
+            MoviesTrendingNetflix.objects.create(**data)
+
+    for index, movie in enumerate(disney_plus_movies[:50]):
+        if MoviesTrendingDisneyPlus.objects.filter(tmdb_id=movie['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': movie['tmdb_id'],
+                'imdb_id': movie['imdb_id'],
+                'rank': index + 1
+            }
+            MoviesTrendingDisneyPlus.objects.create(**data)
+
+    for index, movie in enumerate(amazon_prime_movies[:50]):
+        if MoviesTrendingAmazonPrime.objects.filter(tmdb_id=movie['tmdb_id']).first() == None:
+            # create new record
+            data = {
+                'tmdb_id': movie['tmdb_id'],
+                'imdb_id': movie['imdb_id'],
+                'rank': index + 1
+            }
+            MoviesTrendingAmazonPrime.objects.create(**data)
+
+    data = {
+        'netflix_movies': netflix_movies,
+        'disney_plus_movies': disney_plus_movies,
+        'amazon_prime_movies': amazon_prime_movies
+    }
+
+    return data
