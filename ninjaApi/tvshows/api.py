@@ -1209,10 +1209,10 @@ def fetch_tv_shows_new_releases_TMDB():
     return tv_show_list
 
 # fetch trending now tv shows from TMDB (weekly trending)
-def fetch_tv_shows_trending_weekly_TMDB():
+def fetch_tv_shows_trending_weekly_TMDB(page_max=10):
     base_url = "https://api.themoviedb.org/3/trending/tv/week"
     page = 1
-    max_pages = 10 # TMDB limits us to 500 pages
+    max_pages = page_max # TMDB limits us to 500 pages
     tv_show_list = []
 
     # set headers
@@ -1797,13 +1797,13 @@ def fetch_tv_shows_trending_services_cached():
 # amazon video             | 10
 # amazon prime video       | 9 and 119
 # amazon prime video (ads) | 2100
-def fetch_tv_shows_trending_services():
+def fetch_tv_shows_trending_services(page_max=100):
     netflix_shows = []
     disney_plus_shows = []
     amazon_prime_shows = []
 
     # get all trending shows from TMDB
-    all_trending_shows = fetch_tv_shows_trending_weekly_TMDB()
+    all_trending_shows = fetch_tv_shows_trending_weekly_TMDB(page_max)
 
     headers = {
         "accept": "application/json",

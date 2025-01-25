@@ -7,8 +7,8 @@ from django_apscheduler.models import DjangoJobExecution
 import sys
 from datetime import date, datetime, time, timedelta
 from requests import Response
-from movies.api import fetch_movies_new_releases_TMDB, fetch_movies_trending_daily_TMDB, fetch_movies_trending_weekly_TMDB
-from tvshows.api import fetch_tv_shows_new_releases_TMDB, fetch_tv_shows_trending_daily_TMDB, fetch_tv_shows_trending_weekly_TMDB
+from movies.api import fetch_movies_new_releases_TMDB, fetch_movies_trending_daily_TMDB, fetch_movies_trending_services, fetch_movies_trending_weekly_TMDB
+from tvshows.api import fetch_tv_shows_new_releases_TMDB, fetch_tv_shows_trending_daily_TMDB, fetch_tv_shows_trending_services, fetch_tv_shows_trending_weekly_TMDB
 from user.models import User
 from django.db.models import Q, F
 from django_apscheduler import util
@@ -87,6 +87,20 @@ def update_trending_weekly_movies():
     print("Ended scheduled task - update trending weekly movies")
     return
 
+# get trending tv shows from streaming services
+def update_trending_services_tv_shows():
+    print("Running scheduled task - update trending services tv shows")
+    fetch_tv_shows_trending_services()
+    print("Ended scheduled task - update trending services tv shows")
+    return
+
+# get trending movies from streaming services
+def update_trending_services_movies():
+    print("Running scheduled task - update trending services movies")
+    fetch_movies_trending_services(150)
+    print("Ended scheduled task - update trending services movies")
+    return
+
 # start the scheduler
 def start_scheduler():
     scheduler = BackgroundScheduler()
@@ -148,6 +162,28 @@ def start_scheduler():
         'interval', 
         hours=8, 
         id='update_trending_weekly_movies', 
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update trending services tv shows
+    scheduler.add_job(
+        update_trending_services_tv_shows,
+        trigger=CronTrigger(
+            day_of_week="mon", hour="00", minute="00"
+        ),  # Midnight on Monday
+        id="update_trending_services_tv_shows",
+        max_instances=1,
+        replace_existing=True,
+    )
+
+    # update trending services movies
+    scheduler.add_job(
+        update_trending_services_movies,
+        trigger=CronTrigger(
+            day_of_week="mon", hour="00", minute="00"
+        ),  # Midnight on Monday
+        id="update_trending_services_movies",
         max_instances=1,
         replace_existing=True,
     )

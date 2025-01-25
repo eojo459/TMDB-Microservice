@@ -938,10 +938,10 @@ def fetch_movies_new_releases_TMDB():
     return movie_list
 
 # fetch trending now movies from TMDB (weekly trending)
-def fetch_movies_trending_weekly_TMDB():
+def fetch_movies_trending_weekly_TMDB(page_max=10):
     base_url = "https://api.themoviedb.org/3/trending/movie/week"
     page = 1
-    max_pages = 10 # TMDB limits us to 500 pages
+    max_pages = page_max # TMDB limits us to 500 pages
     movies_list = []
 
     # set headers
@@ -1790,13 +1790,13 @@ def fetch_movies_trending_services_cached():
 # amazon video             | 10
 # amazon prime video       | 9 and 119
 # amazon prime video (ads) | 2100
-def fetch_movies_trending_services():
+def fetch_movies_trending_services(max_pages=100):
     netflix_movies = []
     disney_plus_movies = []
     amazon_prime_movies = []
 
     # get all trending movies from TMDB
-    all_trending_movies = fetch_movies_trending_weekly_TMDB()
+    all_trending_movies = fetch_movies_trending_weekly_TMDB(max_pages)
 
     headers = {
         "accept": "application/json",
