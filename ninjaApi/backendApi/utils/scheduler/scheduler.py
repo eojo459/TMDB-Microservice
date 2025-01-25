@@ -170,7 +170,7 @@ def start_scheduler():
     scheduler.add_job(
         update_trending_services_tv_shows,
         trigger=CronTrigger(
-            day_of_week="mon", hour="00", minute="00"
+            day_of_week="mon", hour="00", minute="01"
         ),  # Midnight on Monday
         id="update_trending_services_tv_shows",
         max_instances=1,
@@ -181,7 +181,7 @@ def start_scheduler():
     scheduler.add_job(
         update_trending_services_movies,
         trigger=CronTrigger(
-            day_of_week="mon", hour="00", minute="00"
+            day_of_week="mon", hour="00", minute="05"
         ),  # Midnight on Monday
         id="update_trending_services_movies",
         max_instances=1,
