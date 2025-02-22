@@ -651,13 +651,13 @@ def get_movie_recommendations_logic_TMDB(movie_id):
                     'description': result['overview'][:255],
                     'origin_location': '',
                     'languages': result['original_language'],
-                    #'genres': result['genre_ids'],
+                    'genres': result['genre_ids'],
                     #'last_updated': datetime.now().date(),
                     'run_time': 0,
                     #'media_type': result['media_type'],
                 }
 
-                movie_info = create_new_movie(movie_info)
+                #new_movie_info = create_new_movie(movie_info)
                 if movie_info is not None:
                     recommendation_list.append(movie_info)
 
@@ -669,6 +669,10 @@ def get_movie_recommendations_logic_TMDB(movie_id):
             response_json = response.json()
 
     print("===== End of movie recommendations =====")
+
+    # load genres with data
+    for item in recommendation_list:
+        item['genres'] = load_movie_genres(item['genres'])
     
     return recommendation_list
 
@@ -1439,17 +1443,26 @@ def create_new_movie(movie_info):
             return movie_exists
     elif movie_exists:
         return movie_exists
-    elif movie_exists is None:
-        # create new movie entry
-        new_movie = Movies.objects.create(**movie_info)
-        new_movie_full = Movies.objects.prefetch_related(
-            'youtube_trailer',
-            'actors_cast',
-            'director',
-            'genres',
-            'reviews'
-        ).filter(tmdb_id=movie_info['tmdb_id']).first() 
-        return new_movie_full
+
+    # Create new movie entry
+    genres_list = movie_info.pop('genres', [])  # Remove genres from the dictionary
+    new_movie = Movies.objects.create(**movie_info)
+
+    # Assign ManyToMany fields using `.set()`
+    # if genres_list:
+    #     #genre_objects = Genres.objects.filter(tmdb_id__in=genres_list)
+    #     new_movie.genres.set(genres_list)  # Correct way to assign ManyToManyField
+    #     new_movie.save()
+
+    new_movie_full = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(tmdb_id=movie_info['tmdb_id']).first() 
+    return new_movie_full
+        
     
 # get the details for a movie from TMDB
 def load_single_movie_data_TMDB(tmdb_id):
@@ -1892,3 +1905,25 @@ def fetch_movies_trending_services(max_pages=100):
     }
 
     return data
+
+
+# get full genre info based on genre ids
+def load_movie_genres(genres):
+    all_genres = Genres.objects.all()  # Get the entire queryset
+
+    genre_list = []
+
+    for genre_id in genres:  # genres is a list of TMDB genre IDs
+        genre_info = all_genres.filter(tmdb_id=genre_id).first()  # Correct lookup
+
+        if genre_info is None:
+            continue
+        else:
+            new_genre = {
+                'tmdb_id': genre_id,  # Use genre_id directly
+                'name': genre_info.name,
+                'type': 1,
+            }
+            genre_list.append(new_genre)
+
+    return genre_list

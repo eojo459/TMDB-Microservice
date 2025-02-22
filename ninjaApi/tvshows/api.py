@@ -50,7 +50,7 @@ class TVShowRecommendations(Schema):
     rating: float
     release_date: date
     description: str
-    genres: List[int] | None = None
+    genres: List[Genre] | None = None
     languages: str
     media_type: str
     #run_time: int
@@ -167,10 +167,7 @@ def tvshows_data_loading(request):
 @router.get("/seeding/data/{tmdb_id}")
 def tvshows_data_loading_single(request, tmdb_id: int):
     # TODO load data from other sources too
-    if load_single_tv_show_data_TMDB(tmdb_id):
-        return {"success": True}
-    else:
-        return {"success": False}
+    return load_single_tv_show_data_TMDB(tmdb_id)[1]
 
 # create new tv show
 @router.post("/", auth=None)
@@ -664,6 +661,10 @@ def get_tv_recommendations_logic_TMDB(series_id):
             response_json = response.json()
 
     print("===== End of recommendations =====")
+
+    # load genres with data
+    for item in recommendation_list:
+        item['genres'] = load_tv_show_genres(item['genres'])
     
     return recommendation_list
 
@@ -833,7 +834,7 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False, load_seasons=False):
     # check if tv show already exists
     existing_tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
     if existing_tv_show is not None and update == False:
-        return False
+        return False, existing_tv_show
     
     # set headers
     headers = {
@@ -865,7 +866,7 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False, load_seasons=False):
         existing_tv_show.languages = response_json['original_language']
         existing_tv_show.imdb_link = ''
         existing_tv_show.save()
-        return True
+        return True, existing_tv_show
 
     # create new tv show
     new_tv_show = {
@@ -1014,7 +1015,7 @@ def load_single_tv_show_data_TMDB(tmdb_id, update=False, load_seasons=False):
 
     tv_show.save()
 
-    return True
+    return True, tv_show
 
 # get episodes for a season for a tv show from TMDB
 def fetch_episodes_for_season_TMDB(tmdb_id, season_number):
@@ -1898,3 +1899,25 @@ def fetch_tv_shows_trending_services(page_max=100):
     }
 
     return data
+
+
+# get full genre info based on genre ids
+def load_tv_show_genres(genres):
+    all_genres = Genres.objects.all()  # Get the entire queryset
+
+    genre_list = []
+
+    for genre_id in genres:  # genres is a list of TMDB genre IDs
+        genre_info = all_genres.filter(tmdb_id=genre_id).first()  # Correct lookup
+
+        if genre_info is None:
+            continue
+        else:
+            new_genre = {
+                'tmdb_id': genre_id,  # Use genre_id directly
+                'name': genre_info.name,
+                'type': 1,
+            }
+            genre_list.append(new_genre)
+
+    return genre_list
