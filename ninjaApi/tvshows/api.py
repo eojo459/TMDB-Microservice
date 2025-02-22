@@ -92,7 +92,7 @@ class TVShowOut(Schema):
     enabled: bool
     media_type: str | None = None
     expires: datetime | None = None
-    type: str | None = None
+    type: str = "tv"
 
 class MovieOut(Schema):
     id: UUID
@@ -108,6 +108,7 @@ class MovieOut(Schema):
     imdb_link: str | None = None
     run_time: int 
     enabled: bool
+    type: str = "movie"
     #expires: datetime
 
 class Season(Schema):

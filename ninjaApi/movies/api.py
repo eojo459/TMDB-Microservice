@@ -57,6 +57,7 @@ class MovieOut(Schema):
     imdb_link: str | None = None
     run_time: int 
     enabled: bool
+    type: str = "movie"
     #expires: datetime
 
 class MovieRecommendations(Schema):
@@ -94,6 +95,7 @@ class MovieOutFull(Schema):
     run_time: int | None = None
     enabled: bool | None = None
     media_type: str | None = None
+    type: str = "movie"
     #expires: datetime
 
 class TrendingServicesMovie(Schema):
@@ -188,7 +190,7 @@ def get_movie_by_tmdb_id(request, tmdb_id: int):
     
     # update movie if runtime == 0
     if movie.run_time <= 0:
-        load_single_movie_data_TMDB(tmdb_id, True)
+        load_single_movie_data_TMDB(tmdb_id)
         movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
     
     # get recommendations for movie
