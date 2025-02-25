@@ -430,18 +430,30 @@ def get_tv_recommendations(request, tmdb_id: str):
 
 @router.get("/newly-released/", response=List[TVShowOut])
 def get_newly_released_tv_shows_TMDB(request):
-    #return fetch_tv_shows_new_releases_TMDB()
-   return fetch_tv_shows_new_releases_cached()
+   cached_data = fetch_tv_shows_new_releases_cached()
+
+   if len(cached_data) > 0:
+       return cached_data
+   
+   return fetch_tv_shows_new_releases_TMDB()
 
 @router.get("/trending/daily/", response=List[TVShowOut])
 def get_trending_tv_shows_daily_TMDB(request):
-    #return fetch_tv_shows_trending_daily_TMDB()
-    return fetch_tv_shows_trending_daily_cached()
+    cached_data = fetch_tv_shows_trending_daily_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_tv_shows_trending_daily_TMDB()
 
 @router.get("/trending/weekly/", response=List[TVShowOut])
 def get_trending_tv_shows_weekly_TMDB(request):
-    #return fetch_tv_shows_trending_weekly_TMDB()
-    return fetch_tv_shows_trending_weekly_cached()
+    cached_data = fetch_tv_shows_trending_weekly_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_tv_shows_trending_weekly_TMDB()
 
 # delete all tv show episodes
 @router.delete("/delete/episodes/all/")
@@ -465,20 +477,42 @@ def get_tv_shows_season_TMDB(request, tmdb_id: int, season_number: int):
 
 @router.get("/trending/streaming/", response=TrendingServicesTV)
 def get_trending_tv_shows_streaming_services(request):
-    #return fetch_tv_shows_trending_services()
-    return fetch_tv_shows_trending_services_cached()
+    cached_data = fetch_tv_shows_trending_services_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_tv_shows_trending_services()
 
 @router.get("/trending/netflix/", response=List[TVShowOut])
 def get_trending_tv_shows_netflix(request):
-    return fetch_tv_shows_trending_netflix_cached()
+    cached_data = fetch_tv_shows_trending_netflix_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_tv_shows_trending_services()
+    return data["netflix_tv_shows"]
 
 @router.get("/trending/disney_plus/", response=List[TVShowOut])
 def get_trending_tv_shows_disney_plus(request):
-    return fetch_tv_shows_trending_disney_plus_cached()
+    cached_data = fetch_tv_shows_trending_disney_plus_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_tv_shows_trending_services()
+    return data["disney_plus_tv_shows"]
 
 @router.get("/trending/amazon_prime/", response=List[TVShowOut])
 def get_trending_tv_shows_amazon_prime(request):
-    return fetch_tv_shows_trending_amazon_prime_cached()
+    cached_data = fetch_tv_shows_trending_amazon_prime_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_tv_shows_trending_services()
+    return data["amazon_prime_tv_shows"]
 
 #################################
 # HELPERS

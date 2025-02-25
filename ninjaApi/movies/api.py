@@ -573,18 +573,30 @@ def get_movie_recommendations(request, tmdb_id: str):
 
 @router.get("/newly-released/", response=List[MovieOutFull])
 def get_newly_released_movies_TMDB(request):
-    #return fetch_movies_new_releases_TMDB()
-    return fetch_movies_new_releases_cached()
+    cached_data = fetch_movies_new_releases_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_movies_new_releases_TMDB()
 
 @router.get("/trending/daily/", response=List[MovieOutFull])
 def get_trending_movies_daily_TMDB(request):
-    #return fetch_movies_trending_daily_TMDB()
-    return fetch_movies_trending_daily_cached()
+    cached_data = fetch_movies_trending_daily_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_movies_trending_daily_TMDB()
 
 @router.get("/trending/weekly/", response=List[MovieOutFull])
 def get_trending_movies_weekly_TMDB(request):
-    #return fetch_movies_trending_weekly_TMDB()
-    return fetch_movies_trending_weekly_cached()
+    cached_data = fetch_movies_trending_weekly_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_movies_trending_weekly_TMDB()
 
 @router.get("/details/{tmdb_id}", response=MovieOutFull)
 def get_movie_details_TMDB(request, tmdb_id: str):
@@ -592,20 +604,42 @@ def get_movie_details_TMDB(request, tmdb_id: str):
 
 @router.get("/trending/streaming/", response=TrendingServicesMovie)
 def get_trending_movies_streaming_services(request):
-    #return fetch_movies_trending_services()
-    return fetch_movies_trending_services_cached()
+    cached_data = fetch_movies_trending_services_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    return fetch_movies_trending_services()
 
 @router.get("/trending/netflix/", response=List[MovieOutFull])
 def get_trending_movies_netflix(request):
-    return fetch_movies_trending_netflix_cached()
+    cached_data = fetch_movies_trending_netflix_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_movies_trending_services()
+    return data["netflix_movies"]
 
 @router.get("/trending/disney_plus/", response=List[MovieOutFull])
 def get_trending_movies_disney_plus(request):
-    return fetch_movies_trending_disney_plus_cached()
+    cached_data = fetch_movies_trending_disney_plus_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_movies_trending_services()
+    return data["disney_plus_movies"]
 
 @router.get("/trending/amazon_prime/", response=List[MovieOutFull])
 def get_trending_movies_amazon_prime(request):
-    return fetch_movies_trending_amazon_prime_cached()
+    cached_data = fetch_movies_trending_amazon_prime_cached()
+
+    if len(cached_data) > 0:
+        return cached_data
+    
+    data = fetch_movies_trending_services()
+    return data["amazon_prime_movies"]
 
 ###################################
 # HELPERS
