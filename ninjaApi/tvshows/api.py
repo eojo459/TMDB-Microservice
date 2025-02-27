@@ -456,14 +456,16 @@ def get_trending_tv_shows_weekly_TMDB(request):
     return fetch_tv_shows_trending_weekly_TMDB()
 
 # delete all tv show episodes
-@router.delete("/delete/episodes/all/")
-def delete_tv_show_episodes_by_imdb_id(request):
-    all_tv_shows = Episodes.objects.all()
+# only for testing
+# @router.delete("/delete/episodes/all/")
+# def delete_tv_show_episodes_by_imdb_id(request):
+#     all_tv_shows = Episodes.objects.all()
 
-    for tv_show in all_tv_shows:
-        tv_show.delete()
+#     for tv_show in all_tv_shows:
+#         tv_show.archived = True
+#         tv_show.save()
 
-    return {"success": True}
+#     return {"success": True}
 
 # get episode data for a tv show
 @router.get("/tmdb_id/{tmdb_id}/season/{season_number}/episode/{episode_number}", response=List[Season])
