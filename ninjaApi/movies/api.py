@@ -205,7 +205,7 @@ def get_movie_by_imdb_id(request, imdb_id: str):
     movie.recommendations = get_movie_recommendations_logic_TMDB(movie.tmdb_id)
     return movie
 
-# get list of tv show by tmdb_id
+# get list of movies by tmdb_id
 @router.post("/tmdb_ids/", response=List[MovieOutFull])
 def get_list_of_movies_by_tmdb_id(request, payload: List[object]):
     if request.method != 'POST':
@@ -218,11 +218,11 @@ def get_list_of_movies_by_tmdb_id(request, payload: List[object]):
 
         movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
         if movie is None:
-            # create new tv show
+            # create new movie
             if load_single_movie_data_TMDB(tmdb_id):
-                tv_show = TVShows.objects.filter(tmdb_id=tmdb_id).first()
+                movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
 
-        # update tv show if seasons == 0
+        # update runtime if runtime == 0
         if movie.run_time <= 0:
             load_single_movie_data_TMDB(tmdb_id)
             movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
@@ -1723,7 +1723,7 @@ def fetch_movies_trending_netflix_cached():
     movies_trending_netflix = MoviesTrendingNetflix.objects.all()[:50]
 
     for item in movies_trending_netflix:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
@@ -1743,7 +1743,7 @@ def fetch_movies_trending_disney_plus_cached():
     movies_trending_disney_plus = MoviesTrendingDisneyPlus.objects.all()[:50]
 
     for item in movies_trending_disney_plus:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
@@ -1763,7 +1763,7 @@ def fetch_movies_trending_amazon_prime_cached():
     movies_trending_amazon_prime = MoviesTrendingAmazonPrime.objects.all()[:50]
 
     for item in movies_trending_amazon_prime:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
@@ -1787,7 +1787,7 @@ def fetch_movies_trending_services_cached():
     movies_trending_amazon_prime = MoviesTrendingAmazonPrime.objects.all()[:50]
 
     for item in movies_trending_netflix:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
@@ -1799,7 +1799,7 @@ def fetch_movies_trending_services_cached():
         trending_netflix_list.append(movie)
 
     for item in movies_trending_disney_plus:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
@@ -1811,7 +1811,7 @@ def fetch_movies_trending_services_cached():
         trending_disney_plus_list.append(movie)
 
     for item in movies_trending_amazon_prime:
-        # populate tv show info
+        # populate movies info
         movie = Movies.objects.prefetch_related(
             'youtube_trailer',
             'actors_cast',
