@@ -72,7 +72,7 @@ class MovieRecommendations(Schema):
     genres: List[Genre] | None = None
     languages: str
     media_type: str | None = None
-    #run_time: int
+    run_time: int
 
 class MovieOutFull(Schema):
     id: UUID | None = None
@@ -185,12 +185,12 @@ def get_movie_by_tmdb_id(request, tmdb_id: int):
     movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
     if movie is None:
         # create new movie
-        if load_single_movie_data_TMDB(tmdb_id):
+        if load_single_movie_data_TMDB(tmdb_id)[0]:
             movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
     
     # update movie if runtime == 0
     if movie.run_time <= 0:
-        load_single_movie_data_TMDB(tmdb_id)
+        load_single_movie_data_TMDB(tmdb_id, True)
         movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
     
     # get recommendations for movie
@@ -219,7 +219,7 @@ def get_list_of_movies_by_tmdb_id(request, payload: List[object]):
         movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
         if movie is None:
             # create new movie
-            if load_single_movie_data_TMDB(tmdb_id):
+            if load_single_movie_data_TMDB(tmdb_id)[0]:
                 movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
 
         # update runtime if runtime == 0
@@ -273,6 +273,7 @@ def get_movies_by_name(request, title_str: str):
 def get_all_by_name(request, title_str: str):
     all_list = []
 
+    # search movies by title
     movies_list = Movies.objects.prefetch_related(
         'youtube_trailer',
         'actors_cast',
@@ -285,6 +286,7 @@ def get_all_by_name(request, title_str: str):
         movie.media_type = "movie"
         all_list.append(movie)
 
+    # search tv shows by title
     tv_show_list = TVShows.objects.prefetch_related(
         'youtube_trailer',
         'actors_cast',
@@ -296,6 +298,62 @@ def get_all_by_name(request, title_str: str):
     for tv in tv_show_list:
         tv.media_type = "tv"
         all_list.append(tv)
+
+    # TODO: search movies w/ actor by name
+    # TODO: search tv shows w/ actor by name
+
+    # search tv shows by tmdb id
+    if title_str.isnumeric():
+        tv_show_tmdb_id_list = TVShows.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=title_str)
+
+        for tv in tv_show_tmdb_id_list:
+            tv.media_type = "tv"
+            all_list.append(tv)
+
+        # search movies by tmdb id
+        movie_tmdb_id_list = Movies.objects.prefetch_related(
+            'youtube_trailer',
+            'actors_cast',
+            'director',
+            'genres',
+            'reviews'
+        ).filter(tmdb_id=title_str)
+
+        for movie in movie_tmdb_id_list:
+            movie.media_type = "movie"
+            all_list.append(movie)
+
+    # search tv shows by imdb id
+    tv_show_imdb_id_list = TVShows.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(imdb_id=title_str)
+
+    for tv in tv_show_imdb_id_list:
+        tv.media_type = "tv"
+        all_list.append(tv)
+
+    # search movies by imdb id
+    movie_imdb_id_list = Movies.objects.prefetch_related(
+        'youtube_trailer',
+        'actors_cast',
+        'director',
+        'genres',
+        'reviews'
+    ).filter(imdb_id=title_str)
+
+    for movie in movie_imdb_id_list:
+        movie.media_type = "movie"
+        all_list.append(movie)
 
     return all_list
 
@@ -674,22 +732,44 @@ def get_movie_recommendations_logic_TMDB(movie_id):
 
             # for each result on this page, create new movie entry in database if doesn't already exist
             for result in response_json['results']:
-                movie_info = {
-                    'tmdb_id': result['id'],
-                    #'imdb_id': "zz" + str(result['id']),
-                    'poster_url': result['poster_path'],
-                    'backdrop_url': result['backdrop_path'],
-                    'title': result['title'][:255],
-                    'rating': result['vote_average'],
-                    'release_date': '9999-01-01' if result['release_date'] == '' else result['release_date'],
-                    'description': result['overview'][:255],
-                    'origin_location': '',
-                    'languages': result['original_language'],
-                    'genres': result['genre_ids'],
-                    #'last_updated': datetime.now().date(),
-                    'run_time': 0,
-                    #'media_type': result['media_type'],
-                }
+                # check if movie already exists
+                movie_exists = Movies.objects.filter(tmdb_id=result['id']).first()
+                if movie_exists is not None:
+                    movie_info = {
+                        'tmdb_id': movie_exists.tmdb_id,
+                        #'imdb_id': "zz" + str(result['id']),
+                        'poster_url': movie_exists.poster_url,
+                        'backdrop_url': movie_exists.backdrop_url,
+                        'title': movie_exists.title,
+                        'rating': movie_exists.rating,
+                        'release_date': movie_exists.release_date,
+                        'description': movie_exists.description,
+                        'origin_location': '',
+                        'languages': movie_exists.languages,
+                        'genres': movie_exists.genres,
+                        #'last_updated': datetime.now().date(),
+                        'run_time': movie_exists.run_time,
+                        #'media_type': result['media_type'],
+                    }
+                else:
+                    # create new movie
+                    movie_data = load_single_movie_data_TMDB(result['id'])[1]
+                    movie_info = {
+                        'tmdb_id': movie_data.tmdb_id,
+                        #'imdb_id': "zz" + str(result['id']),
+                        'poster_url': movie_data.poster_url,
+                        'backdrop_url': movie_data.backdrop_url,
+                        'title': movie_data.title,
+                        'rating': movie_data.rating,
+                        'release_date': movie_data.release_date,
+                        'description': movie_data.description,
+                        'origin_location': '',
+                        'languages': movie_data.languages,
+                        'genres': movie_data.genres,
+                        #'last_updated': datetime.now().date(),
+                        'run_time': movie_data.run_time,
+                        #'media_type': result['media_type'],
+                    }
 
                 #new_movie_info = create_new_movie(movie_info)
                 if movie_info is not None:
@@ -1499,7 +1579,7 @@ def create_new_movie(movie_info):
         
     
 # get the details for a movie from TMDB
-def load_single_movie_data_TMDB(tmdb_id):
+def load_single_movie_data_TMDB(tmdb_id, update=False):
     # set headers
     headers = {
         "accept": "application/json",
@@ -1507,9 +1587,10 @@ def load_single_movie_data_TMDB(tmdb_id):
     }
     
     # get all movies
-    movie = Movies.objects.filter(tmdb_id=tmdb_id).first()
-    if movie is None:
-        return False
+    movie_exists = Movies.objects.filter(tmdb_id=tmdb_id).first()
+
+    if movie_exists is not None and update == False:
+        return False, movie_exists                  
 
     actor_list = []
     director_list = []
@@ -1517,9 +1598,44 @@ def load_single_movie_data_TMDB(tmdb_id):
     trailer_list = []
 
     # url to get the details about a movie
-    url = f"https://api.themoviedb.org/3/movie/{movie.tmdb_id}?language=en-US&append_to_response=videos,images,credits"
+    url = f"https://api.themoviedb.org/3/movie/{tmdb_id}?language=en-US&append_to_response=videos,images,credits"
     response = requests.get(url, headers=headers)
     response_json = response.json()
+
+    if movie_exists is not None and update == True:
+        # update movie
+        movie_exists.title = response_json['title']
+        movie_exists.tmdb_id = response_json['id']
+        movie_exists.description = response_json['overview'][:252] + "..." if len(response_json['overview']) > 255 else response_json['overview'][:255]
+        movie_exists.poster_url = response_json['poster_path']
+        movie_exists.backdrop_url = response_json['backdrop_path']
+        movie_exists.run_time = response_json['runtime']
+        movie_exists.rating = response_json['vote_average']
+        movie_exists.release_date = response_json['release_date']
+        movie_exists.languages = response_json['original_language']
+        movie_exists.imdb_link = ''
+        movie_exists.save()
+        return True, movie_exists
+    
+    # create new movie
+    new_movie = {
+        'tmdb_id': response_json['id'],
+        'imdb_id': "zz" + str(response_json['id']),
+        'title': response_json['title'],
+        #'original_title': response_json['original_name'],
+        'description': response_json['overview'][:252] + "..." if len(response_json['overview']) > 255 else response_json['overview'][:255],
+        'poster_url': response_json['poster_path'],
+        'backdrop_url': response_json['backdrop_path'],
+        'run_time': response_json['runtime'],
+        'rating': response_json['vote_average'],
+        #'vote_count': response_json['vote_count'],
+        'release_date': response_json['release_date'],
+        'languages': response_json['original_language'],
+        'imdb_link': '',
+    }      
+
+    # create the new tv show
+    movie = Movies.objects.create(**new_movie)
 
     # update imdb_id
     if movie.imdb_id is not None and movie.imdb_id != '':
@@ -1657,7 +1773,7 @@ def load_single_movie_data_TMDB(tmdb_id):
 
     movie.save()
 
-    return True
+    return True, movie
 
 # get newly released movies from database cache
 def fetch_movies_new_releases_cached():
@@ -1943,6 +2059,9 @@ def fetch_movies_trending_services(max_pages=100):
 
 # get full genre info based on genre ids
 def load_movie_genres(genres):
+    if not genres or not isinstance(genres, list):
+        return []
+    
     all_genres = Genres.objects.all()  # Get the entire queryset
 
     genre_list = []

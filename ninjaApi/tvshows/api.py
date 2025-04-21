@@ -53,6 +53,7 @@ class TVShowRecommendations(Schema):
     genres: List[Genre] | None = None
     languages: str
     media_type: str
+    seasons: int
     #run_time: int
 
 class TVShowEpisode(Schema):
@@ -672,22 +673,44 @@ def get_tv_recommendations_logic_TMDB(series_id):
 
             # for each result on this page, create new movie entry in database if doesn't already exist
             for result in response_json['results']:
-                movie_info = {
-                    'tmdb_id': result['id'],
-                    #'imdb_id': "zz" + str(result['id']),
-                    'poster_url': result['poster_path'],
-                    'title': result['name'][:255],
-                    'rating': result['vote_average'],
-                    'release_date': '9999-01-01' if result['first_air_date'] == '' else result['first_air_date'],
-                    'description': result['overview'][:255],
-                    'origin_location': '',
-                    'languages': result['original_language'],
-                    'genres': result['genre_ids'],
-                    #'last_updated': datetime.now().date(),
-                    'run_time': 0,
-                    'media_type': result['media_type'],
-                }
-                recommendation_list.append(movie_info)
+                # if tv show exists, return data
+                tvshow_exists = TVShows.objects.filter(tmdb_id=result['id']).first()
+                if tvshow_exists is not None:
+                    tv_info = {
+                        'tmdb_id': tvshow_exists.tmdb_id,
+                        #'imdb_id': "zz" + str(result['id']),
+                        'poster_url': tvshow_exists.poster_url,
+                        'title': tvshow_exists.title,
+                        'rating': tvshow_exists.rating,
+                        'release_date': tvshow_exists.release_date,
+                        'description': tvshow_exists.description,
+                        'origin_location': '',
+                        'languages': tvshow_exists.languages,
+                        'genres': tvshow_exists.genres,
+                        #'last_updated': datetime.now().date(),
+                        'seasons': tvshow_exists.seasons,
+                        'media_type': 'tv',
+                    }
+                    recommendation_list.append(tv_info)
+                else:
+                    # else create new tv show then return data
+                    tv_show_data = load_single_tv_show_data_TMDB(result['id'])[1]
+                    tv_info = {
+                        'tmdb_id': tv_show_data.tmdb_id,
+                        #'imdb_id': "zz" + str(result['id']),
+                        'poster_url': tv_show_data.poster_url,
+                        'title': tv_show_data.title,
+                        'rating': tv_show_data.rating,
+                        'release_date': tv_show_data.release_date,
+                        'description': tv_show_data.description,
+                        'origin_location': '',
+                        'languages': tv_show_data.languages,
+                        'genres': tv_show_data.genres,
+                        #'last_updated': datetime.now().date(),
+                        'seasons': tv_show_data.seasons,
+                        'media_type': 'tv',
+                    }
+                    recommendation_list.append(tv_info)
 
             # go to next page
             page += 1
@@ -1939,6 +1962,9 @@ def fetch_tv_shows_trending_services(page_max=100):
 
 # get full genre info based on genre ids
 def load_tv_show_genres(genres):
+    if not genres or not isinstance(genres, list):
+        return []
+    
     all_genres = Genres.objects.all()  # Get the entire queryset
 
     genre_list = []
